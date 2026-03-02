@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>设备管理 - 米家控制面板</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; min-height: 100vh; padding: 20px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { text-align: center; margin-bottom: 20px; color: #333; }
+    .nav { text-align: center; margin-bottom: 20px; }
+    .nav a { color: #007aff; text-decoration: none; margin: 0 15px; }
+    .nav a:hover { text-decoration: underline; }
+    .section { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .section h2 { margin-bottom: 15px; color: #333; font-size: 18px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    .device-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
+    .device-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
+    .device-item:hover { background: #f0f0f0; }
+    .device-info { flex: 1; }
+    .device-name { font-weight: 500; color: #333; margin-bottom: 4px; }
+    .device-type { font-size: 12px; color: #888; }
+    .device-actions { display: flex; align-items: center; gap: 10px; }
+    .toggle-switch { position: relative; width: 50px; height: 28px; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 28px; }
+    .slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+    input:checked + .slider { background-color: #007aff; }
+    input:checked + .slider:before { transform: translateX(22px); }
+    .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .btn-primary { background: #007aff; color: white; }
+    .btn-primary:hover { background: #0056b3; }
+    .btn-secondary { background: #f0f0f0; color: #333; }
+    .btn-secondary:hover { background: #e0e0e0; }
+    .actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .status { font-size: 12px; color: #888; }
+    .status.online { color: #4caf50; }
+    .status.offline { color: #f44336; }
+    .loading { text-align: center; padding: 40px; color: #888; }
+    .empty { text-align: center; padding: 40px; color: #888; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>设备管理</h1>
+    <div class="nav">
+      <a href="/">← 返回控制面板</a>
+    </div>
+    
+    <div class="actions">
+      <div>
+        <button class="btn btn-primary" onclick="scanDevices()">扫描新设备</button>
+        <button class="btn btn-secondary" onclick="loadDevices()">刷新列表</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="section">
+      <h2>已配置设备</h2>
+      <div id="device-list" class="device-list">
+        <div class="loading">加载中...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const TYPE_LABELS = {
+      light: '灯光', airconditioner: '空调', humidifier: '加湿器',
+      plug: '插座', sensor: '传感器', speaker: '音响', appliance: '家电',
+      gateway: '网关', mesh_switch: '智能开关',
+    };
+
+    async function loadDevices() {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = '加载中...';
+      
+      try {
+        const response = await fetch('/api/devices/all');
+        const devices = await response.json();
+        
+        const listEl = document.getElementById('device-list');
+        if (devices.length === 0) {
+          listEl.innerHTML = '<div class="empty">暂无设备</div>';
+          return;
+        }
+        
+        listEl.innerHTML = devices.map(d => `
+          <div class="device-item">
+            <div class="device-info">
+              <div class="device-name">${d.name}</div>
+              <div class="device-type">${TYPE_LABELS[d.type] || d.type} ${d.controllable ? '· 可控制' : ''}</div>
+            </div>
+            <div class="device-actions">
+              <label class="toggle-switch">
+                <input type="checkbox" ${d.display ? 'checked' : ''} onchange="toggleDisplay('${d.id}', this.checked)">
+                <span class="slider"></span>
+              </label>
+              <span class="status ${d.display ? 'online' : 'offline'}">${d.display ? '显示' : '隐藏'}</span>
+            </div>
+          </div>
+        `).join('');
+        
+        statusEl.textContent = `共 ${devices.length} 个设备`;
+      } catch (e) {
+        statusEl.textContent = '加载失败: ' + e.message;
+      }
+    }
+
+    async function toggleDisplay(deviceId, display) {
+      try {
+        const response = await fetch('/api/devices/display', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_id: deviceId, display: display })
+        });
+        const result = await response.json();
+        if (result.ok) {
+          loadDevices();
+        } else {
+          alert('操作失败: ' + (result.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('操作失败: ' + e.message);
+      }
+    }
+
+    async function scanDevices() {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = '正在扫描设备...';
+      
+      try {
+        const response = await fetch('/api/devices/scan', { method: 'POST' });
+        const result = await response.json();
+        if (result.ok) {
+          statusEl.textContent = result.message;
+        } else {
+          statusEl.textContent = '扫描失败: ' + (result.error || '未知错误');
+        }
+      } catch (e) {
+        statusEl.textContent = '扫描失败: ' + e.message;
+      }
+    }
+
+    loadDevices();
+  </script>
+</body>
+</html>

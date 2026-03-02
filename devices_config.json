@@ -1,0 +1,14 @@
+{
+  "display_devices": [
+    "mesh_switch_living_lamp",
+    "plug_marshall",
+    "mesh_switch_bathroom_left",
+    "mesh_switch_hall_downlight",
+    "mesh_switch_dining",
+    "mesh_switch_master_left",
+    "sensor_air",
+    "mesh_switch_second_bedroom",
+    "gateway_main"
+  ],
+  "scanned_devices": []
+}

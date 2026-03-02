@@ -44,10 +44,29 @@
     cursor: pointer;
     font-size: 0.85rem;
     transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
   .refresh-btn:hover { background: var(--card-hover); color: var(--text); }
-  .refresh-btn.spinning { animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .refresh-btn:active { transform: scale(0.97); }
+  .refresh-btn .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .refresh-btn.loading .spinner {
+    opacity: 1;
+    animation: spinner-rotate 0.8s linear infinite;
+  }
+  .refresh-btn.loading .btn-text {
+    opacity: 0.7;
+  }
+  @keyframes spinner-rotate { to { transform: rotate(360deg); } }
 
   /* ── Air quality bar ── */
   #air-bar {
@@ -181,7 +200,13 @@
 
 <header>
   <h1>米家 <span>控制面板</span></h1>
-  <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">↻ 刷新</button>
+  <div style="display: flex; gap: 10px;">
+    <a href="/manage" style="color: #007aff; text-decoration: none; padding: 8px 16px; background: white; border-radius: 8px; font-size: 14px;">设备管理</a>
+    <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
+      <div class="spinner"></div>
+      <span class="btn-text">刷新</span>
+    </button>
+  </div>
 </header>
 
 <div id="air-bar"><span class="air-offline">空气检测仪加载中…</span></div>
@@ -194,15 +219,17 @@ const DEVICES = {{ devices | tojson }};
 const TYPE_ICONS = {
   light: '💡', airconditioner: '❄️', humidifier: '💧',
   plug: '🔌', sensor: '📊', speaker: '🔊', appliance: '🏠',
+  mesh_switch: '⚡',
 };
 const TYPE_LABELS = {
   light: '灯光', airconditioner: '空调', humidifier: '加湿器',
   plug: '插座', sensor: '传感器', speaker: '音响', appliance: '家电',
+  mesh_switch: '智能开关',
 };
 const SECTIONS = [
   { label: '灯光',       types: ['light'] },
   { label: '气候',       types: ['airconditioner', 'humidifier'] },
-  { label: '插座 / 音响', types: ['plug', 'speaker'] },
+  { label: '开关 / 插座 / 音响', types: ['mesh_switch', 'plug', 'speaker'] },
   { label: '传感器',     types: ['sensor'] },
   { label: '家电',       types: ['appliance'] },
 ];
@@ -318,7 +345,7 @@ function renderAll() {
 // ── Data fetching ─────────────────────────────────────────
 async function refreshAll() {
   const btn = document.getElementById('refreshBtn');
-  btn.classList.add('spinning');
+  btn.classList.add('loading');
   try {
     const r = await fetch('/api/status/all');
     const all = await r.json();
@@ -340,12 +367,16 @@ async function refreshAll() {
       }
     });
   }
-  btn.classList.remove('spinning');
+  btn.classList.remove('loading');
 }
 
 async function toggle(id, on) {
   state[id].toggling = true;
+  // 立即更新本地状态，提供即时反馈
+  const oldPower = state[id].power;
+  state[id].power = on;
   updateCard(id);
+  
   try {
     const r = await fetch(`/api/control/${id}`, {
       method: 'POST',
@@ -353,8 +384,16 @@ async function toggle(id, on) {
       body: JSON.stringify({ power: on }),
     });
     const j = await r.json();
-    if (j.ok) state[id].power = on;
-  } catch (e) {}
+    if (!j.ok) {
+      // 如果控制失败，恢复原来的状态
+      state[id].power = oldPower;
+    }
+    // 控制成功后不再查询状态，直接使用本地状态
+    // 依靠定时刷新（15秒）来同步状态
+  } catch (e) {
+    // 如果请求失败，恢复原来的状态
+    state[id].power = oldPower;
+  }
   state[id].toggling = false;
   updateCard(id);
 }
