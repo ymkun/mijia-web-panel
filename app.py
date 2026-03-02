@@ -447,35 +447,61 @@ def api_batch_add_devices():
         config = load_config()
         existing_devices = config.get("devices", [])
         existing_ips = {d.get("ip") for d in existing_devices if d.get("ip")}
+        existing_dids = {d.get("did") for d in existing_devices if d.get("did")}
         display_devices = config.get("display_devices", [])
         
         added_count = 0
         for device in devices:
-            ip = device.get("ip")
-            token = device.get("token")
+            ip = device.get("ip", "")
+            token = device.get("token", "")
+            did = device.get("did", "")
+            is_ble_mesh = device.get("is_ble_mesh") or not ip
             
-            if not ip or not token:
-                continue
-            
-            if ip in existing_ips:
-                for d in existing_devices:
-                    if d.get("ip") == ip:
-                        d["name"] = device.get("name", d.get("name"))
-                        d["token"] = token
-                        break
+            if is_ble_mesh:
+                if not did:
+                    continue
+                if did in existing_dids:
+                    for d in existing_devices:
+                        if d.get("did") == did:
+                            d["name"] = device.get("name", d.get("name"))
+                            break
+                else:
+                    device_id = f"added_{uuid.uuid4().hex[:8]}"
+                    device_type = device.get("type") or get_device_type_from_model(device.get("model"))
+                    new_device = {
+                        "id": device_id,
+                        "name": device.get("name", device.get("model", "新设备")),
+                        "did": did,
+                        "ip": "",
+                        "token": token,
+                        "type": device_type,
+                        "model": device.get("model"),
+                        "is_ble_mesh": True
+                    }
+                    existing_devices.append(new_device)
+                    added_count += 1
             else:
-                device_id = f"added_{uuid.uuid4().hex[:8]}"
-                device_type = device.get("type") or get_device_type_from_model(device.get("model"))
-                new_device = {
-                    "id": device_id,
-                    "name": device.get("name", device.get("model", "新设备")),
-                    "ip": ip,
-                    "token": token,
-                    "type": device_type,
-                    "model": device.get("model")
-                }
-                existing_devices.append(new_device)
-            added_count += 1
+                if not ip or not token:
+                    continue
+                if ip in existing_ips:
+                    for d in existing_devices:
+                        if d.get("ip") == ip:
+                            d["name"] = device.get("name", d.get("name"))
+                            d["token"] = token
+                            break
+                else:
+                    device_id = f"added_{uuid.uuid4().hex[:8]}"
+                    device_type = device.get("type") or get_device_type_from_model(device.get("model"))
+                    new_device = {
+                        "id": device_id,
+                        "name": device.get("name", device.get("model", "新设备")),
+                        "ip": ip,
+                        "token": token,
+                        "type": device_type,
+                        "model": device.get("model")
+                    }
+                    existing_devices.append(new_device)
+                    added_count += 1
         
         config["devices"] = existing_devices
         config["display_devices"] = display_devices
