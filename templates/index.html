@@ -225,6 +225,24 @@
   @keyframes shimmer { to { background-position: -200% 0; } }
 
   .countdown { font-size: 0.72rem; color: var(--text-dim); text-align: right; margin-top: 20px; }
+  
+  .sub-switches { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .sub-switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    gap: 8px;
+  }
+  .sub-switch-name { font-size: 0.82rem; color: var(--text); flex: 1; }
+  .sub-switch-row .status-label { font-size: 0.72rem; }
+  .sub-switch-row .dot { width: 5px; height: 5px; }
+  .toggle-small { width: 36px; height: 20px; }
+  .toggle-small .slider::before { width: 14px; height: 14px; left: 3px; top: 3px; }
+  .toggle-small input:checked + .slider::before { transform: translateX(16px); }
+
 </style>
 </head>
 <body>
@@ -250,23 +268,32 @@ const DEVICES = {{ devices | tojson }};
 const TYPE_ICONS = {
   light: '💡', airconditioner: '❄️', humidifier: '💧',
   plug: '🔌', sensor: '📊', speaker: '🔊', appliance: '🏠',
-  mesh_switch: '⚡',
+  mesh_switch: '⚡', mesh_switch_group: '🔌',
 };
 const TYPE_LABELS = {
   light: '灯光', airconditioner: '空调', humidifier: '加湿器',
   plug: '插座', sensor: '传感器', speaker: '音响', appliance: '家电',
-  mesh_switch: '智能开关',
+  mesh_switch: '智能开关', mesh_switch_group: '智能开关',
 };
 const SECTIONS = [
   { label: '灯光',       types: ['light'] },
   { label: '气候',       types: ['airconditioner', 'humidifier'] },
-  { label: '开关 / 插座 / 音响', types: ['mesh_switch', 'plug', 'speaker'] },
+  { label: '开关 / 插座 / 音响', types: ['mesh_switch', 'mesh_switch_group', 'plug', 'speaker'] },
   { label: '传感器',     types: ['sensor'] },
   { label: '家电',       types: ['appliance'] },
 ];
 
 const state = {};
-DEVICES.forEach(d => { state[d.id] = { online: null, power: null, loading: true, toggling: false, readings: null }; });
+DEVICES.forEach(d => {
+  if (d.type === 'mesh_switch_group' && d.sub_switches) {
+    state[d.id] = { online: null, loading: true, sub_switches: {} };
+    d.sub_switches.forEach(sub => {
+      state[d.id].sub_switches[sub.id] = { online: null, power: null, toggling: false };
+    });
+  } else {
+    state[d.id] = { online: null, power: null, loading: true, toggling: false, readings: null };
+  }
+});
 
 // ── Air bar ──────────────────────────────────────────────
 function co2Class(v) {
@@ -306,6 +333,9 @@ function updateAirBar() {
 
 // ── Card rendering ────────────────────────────────────────
 function renderCardBody(d, s) {
+  if (d.type === 'mesh_switch_group') {
+    return renderMeshGroupCardBody(d, s);
+  }
   if (s.loading) {
     return `<div class="card-body"><div class="status-row"><div class="loading-skeleton" style="width:80px"></div></div></div>`;
   }
@@ -336,6 +366,46 @@ function renderCardBody(d, s) {
     </div>`;
   }
   return `<div class="card-body">${row}</div>`;
+}
+
+function renderMeshGroupCardBody(d, s) {
+  if (s.loading) {
+    return `<div class="card-body"><div class="status-row"><div class="loading-skeleton" style="width:80px"></div></div></div>`;
+  }
+  
+  const dotCls = s.online ? 'dot online' : 'dot offline';
+  const mainStatusText = s.online ? '在线' : '离线';
+  
+  let subSwitchesHtml = '';
+  if (d.sub_switches && s.sub_switches) {
+    subSwitchesHtml = d.sub_switches.map(sub => {
+      const subState = s.sub_switches[sub.id] || { online: false, power: null, toggling: false };
+      const subDotCls = subState.online ? 'dot online' : 'dot offline';
+      const subStatusText = subState.online ? (subState.power === true ? '开' : subState.power === false ? '关' : '—') : '离线';
+      const checked = subState.power === true ? 'checked' : '';
+      const loadingCls = subState.toggling ? ' loading' : '';
+      const disabled = !subState.online || subState.toggling ? 'disabled' : '';
+      
+      return `<div class="sub-switch-row">
+        <span class="sub-switch-name">${sub.name}</span>
+        <span class="status-label"><span class="${subDotCls}"></span>${subStatusText}</span>
+        <label class="toggle toggle-small${loadingCls}">
+          <input type="checkbox" ${checked} onchange="toggleSubSwitch('${d.id}', '${sub.id}', this.checked)" ${disabled}>
+          <span class="slider"></span>
+        </label>
+      </div>`;
+    }).join('');
+  }
+  
+  return `<div class="card-body">
+    <div class="status-row">
+      <span class="status-label"><span class="${dotCls}"></span>${mainStatusText}</span>
+      <button class="mini-refresh-btn" onclick="refreshMeshGroup('${d.id}', this)" title="刷新状态">
+        <span class="refresh-icon">↻</span>
+      </button>
+    </div>
+    <div class="sub-switches">${subSwitchesHtml}</div>
+  </div>`;
 }
 
 function updateCard(id) {
@@ -390,18 +460,30 @@ async function refreshAll() {
     const all = await r.json();
     for (const [id, s] of Object.entries(all)) {
       const old = state[id];
-      const changed = old.loading
-        || old.online !== s.online
-        || old.power !== s.power
-        || JSON.stringify(old.readings) !== JSON.stringify(s.readings || null);
-      state[id] = { online: s.online, power: s.power, loading: false,
-                    toggling: old.toggling || false, readings: s.readings || null };
-      if (changed) updateCard(id);
+      if (!old) continue;
+      
+      if (s.sub_switches) {
+        const changed = old.loading || old.online !== s.online;
+        state[id] = { online: s.online, loading: false, sub_switches: s.sub_switches };
+        if (changed) updateCard(id);
+      } else {
+        const changed = old.loading
+          || old.online !== s.online
+          || old.power !== s.power
+          || JSON.stringify(old.readings) !== JSON.stringify(s.readings || null);
+        state[id] = { online: s.online, power: s.power, loading: false,
+                      toggling: old.toggling || false, readings: s.readings || null };
+        if (changed) updateCard(id);
+      }
     }
   } catch (e) {
     DEVICES.forEach(d => {
-      if (state[d.id].loading) {
-        state[d.id] = { online: false, power: null, loading: false, toggling: false, readings: null };
+      if (state[d.id] && state[d.id].loading) {
+        if (d.type === 'mesh_switch_group') {
+          state[d.id] = { online: false, loading: false, sub_switches: {} };
+        } else {
+          state[d.id] = { online: false, power: null, loading: false, toggling: false, readings: null };
+        }
         updateCard(d.id);
       }
     });
@@ -445,6 +527,48 @@ async function refreshDevice(id, btnEl) {
       readings: s.readings || null 
     };
     updateCard(id);
+  } catch (e) {
+  }
+  if (btnEl) btnEl.classList.remove('loading');
+}
+
+async function toggleSubSwitch(groupId, subId, on) {
+  const groupState = state[groupId];
+  if (!groupState || !groupState.sub_switches || !groupState.sub_switches[subId]) return;
+  
+  groupState.sub_switches[subId].toggling = true;
+  groupState.sub_switches[subId].power = on;
+  updateCard(groupId);
+  
+  try {
+    const r = await fetch(`/api/control/${subId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ power: on }),
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      groupState.sub_switches[subId].power = !on;
+    }
+  } catch (e) {
+    groupState.sub_switches[subId].power = !on;
+  }
+  groupState.sub_switches[subId].toggling = false;
+  updateCard(groupId);
+}
+
+async function refreshMeshGroup(groupId, btnEl) {
+  if (btnEl) btnEl.classList.add('loading');
+  try {
+    const r = await fetch(`/api/mesh/status/${groupId}`);
+    const s = await r.json();
+    const old = state[groupId];
+    state[groupId] = { 
+      online: s.online, 
+      loading: false, 
+      sub_switches: s.sub_switches || {} 
+    };
+    updateCard(groupId);
   } catch (e) {
   }
   if (btnEl) btnEl.classList.remove('loading');

@@ -25,40 +25,6 @@ from mijia_cloud import MijiaCloudConnector
 
 cloud_connector = MijiaCloudConnector(CONFIG_DIR)
 
-DEFAULT_DEVICES = [
-    {"id": "light_living",   "name": "护眼客厅吸顶灯", "ip": "192.168.3.19",  "token": "ac572d894b94f6ff9152b0d4b83620e8", "type": "light"},
-    {"id": "light_master",   "name": "护眼吸顶灯(主卧)", "ip": "192.168.3.18", "token": "e71ca3aa999c0915bb35dcfd129ee833",  "type": "light"},
-    {"id": "light_second",   "name": "护眼吸顶灯(次卧)", "ip": "192.168.3.20", "token": "7744f2b0e25fa12a4c89e0665188ceff",  "type": "light"},
-    {"id": "ac_bedroom",     "name": "卧室空调",          "ip": "192.168.3.27",  "token": "d0f0996992aefabaf404e0b1ccd27e72",  "type": "airconditioner"},
-    {"id": "humi_bedroom",   "name": "加湿器(卧室)",      "ip": "192.168.3.110", "token": "7ccbd60fafc3cb292598e98bf6861875",  "type": "humidifier"},
-    {"id": "humi_main",      "name": "加湿器",            "ip": "192.168.3.39",  "token": "42e51253e3c9a68a523a23f3cb7bdcd8",  "type": "humidifier"},
-    {"id": "plug_marshall",  "name": "马歇尔音响插座",    "ip": "192.168.3.72",  "token": "b832b9071f03b8de61796fcd5d1f0528",  "type": "plug"},
-    {"id": "sensor_air",     "name": "空气检测仪",        "ip": "192.168.3.115", "token": "574c5776754746564a78474d33546159",  "type": "sensor"},
-    {"id": "sensor_gas1",    "name": "天然气卫士(1)",     "ip": "192.168.3.32",  "token": "6afa85ffb8c8ceaabe74a2499c54c7e2",  "type": "sensor"},
-    {"id": "sensor_gas2",    "name": "天然气卫士(2)",     "ip": "192.168.3.38",  "token": "2491754b1a1a59050841e42cc304e98f",  "type": "sensor"},
-    {"id": "speaker_master", "name": "小爱-主卧室",       "ip": "192.168.3.74",  "token": "75706f514f65776c5645624b38505a51",  "type": "speaker"},
-    {"id": "speaker_kitchen","name": "小爱-厨房",         "ip": "192.168.3.75",  "token": "71664179645a743230337142476d6c6f",  "type": "speaker"},
-    {"id": "speaker_living", "name": "小爱-客厅",         "ip": "192.168.3.58",  "token": "515451347978707a754956526c4d7268",  "type": "speaker"},
-    {"id": "microwave",      "name": "微波炉",            "ip": "192.168.3.44",  "token": "ac1c03087158c82a711c99eff86951ae",  "type": "appliance"},
-    {"id": "blender",        "name": "破壁机",            "ip": "192.168.3.94",  "token": "04c591c36b8b74c85cc43e5d3dea934f",  "type": "appliance"},
-    {"id": "gateway_main",   "name": "Xiaomi Home Hub",      "ip": "192.168.3.77", "token": "33665268384134384864456b7a434537", "type": "gateway"},
-    {"id": "mesh_switch_living_lamp",   "name": "客厅灯",      "gateway_id": "gateway_main", "did": "1132827761", "siid": 2, "type": "mesh_switch"},
-    {"id": "mesh_switch_dining",   "name": "餐厅灯",      "gateway_id": "gateway_main", "did": "1132827761", "siid": 3, "type": "mesh_switch"},
-    {"id": "mesh_switch_living_key3",   "name": "客厅开关按键3",      "gateway_id": "gateway_main", "did": "1132827761", "siid": 4, "type": "mesh_switch"},
-    {"id": "mesh_switch_living_key4",   "name": "客厅开关按键4",      "gateway_id": "gateway_main", "did": "1132827761", "siid": 12, "type": "mesh_switch"},
-    {"id": "mesh_switch_master_left",   "name": "主卧室灯",      "gateway_id": "gateway_main", "did": "1133876907", "siid": 2, "type": "mesh_switch"},
-    {"id": "mesh_switch_master_right",   "name": "主卧室右键",      "gateway_id": "gateway_main", "did": "1133876907", "siid": 3, "type": "mesh_switch"},
-    {"id": "mesh_switch_bedside_wardrobe_left",   "name": "床头灯(衣柜)",      "gateway_id": "gateway_main", "did": "1133877605", "siid": 2, "type": "mesh_switch"},
-    {"id": "mesh_switch_bedside_wardrobe_right",   "name": "床头灯右键(衣柜)",      "gateway_id": "gateway_main", "did": "1133877605", "siid": 3, "type": "mesh_switch"},
-    {"id": "mesh_switch_bathroom_left",   "name": "卫生间灯",      "gateway_id": "gateway_main", "did": "1133877109", "siid": 2, "type": "mesh_switch"},
-    {"id": "mesh_switch_bathroom_right",   "name": "卫生间右键",      "gateway_id": "gateway_main", "did": "1133877109", "siid": 3, "type": "mesh_switch"},
-    {"id": "mesh_switch_hall_downlight",   "name": "筒灯",      "gateway_id": "gateway_main", "did": "1133878182", "siid": 2, "type": "mesh_switch"},
-    {"id": "mesh_switch_hall_right",   "name": "门厅右键",      "gateway_id": "gateway_main", "did": "1133878182", "siid": 3, "type": "mesh_switch"},
-    {"id": "mesh_switch_bedside_window_left",   "name": "吸顶灯",      "gateway_id": "gateway_main", "did": "1133877047", "siid": 2, "type": "mesh_switch"},
-    {"id": "mesh_switch_bedside_window_right",   "name": "床头灯右键(窗)",      "gateway_id": "gateway_main", "did": "1133877047", "siid": 3, "type": "mesh_switch"},
-    {"id": "mesh_switch_second_bedroom",   "name": "次卧室开关",      "gateway_id": "gateway_main", "did": "1095536654", "siid": 2, "type": "mesh_switch"},
-]
-
 CONTROLLABLE_TYPES = {"light", "airconditioner", "humidifier", "plug", "mesh_switch"}
 AIR_PROPS = ["co2", "humidity", "temperature", "pm25", "tvoc"]
 
@@ -123,14 +89,20 @@ device_cache = {}
 cache_lock = threading.Lock()
 cache_last_update = 0
 background_refresh_running = False
+scanned_devices_cache = []
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            config.pop("scanned_devices", None)
+            return config
+        except (json.JSONDecodeError, Exception):
+            pass
     return {
-        "devices": DEFAULT_DEVICES,
-        "display_devices": [d["id"] for d in DEFAULT_DEVICES]
+        "devices": [],
+        "display_devices": []
     }
 
 def save_config(config):
@@ -139,7 +111,7 @@ def save_config(config):
 
 def get_all_devices():
     config = load_config()
-    return config.get("devices", DEFAULT_DEVICES)
+    return config.get("devices", [])
 
 def get_device_type_from_model(model):
     if not model:
@@ -168,6 +140,35 @@ def get_display_devices():
 def get_device_map():
     all_devices = get_all_devices()
     return {d["id"]: d for d in all_devices}
+
+def aggregate_mesh_switches(devices):
+    mesh_devices = [d for d in devices if d.get("type") == "mesh_switch"]
+    non_mesh_devices = [d for d in devices if d.get("type") != "mesh_switch"]
+    
+    grouped = {}
+    for d in mesh_devices:
+        did = d.get("did")
+        if did not in grouped:
+            grouped[did] = {
+                "id": f"mesh_group_{did}",
+                "name": d.get("name", "智能开关"),
+                "type": "mesh_switch_group",
+                "gateway_id": d.get("gateway_id"),
+                "did": did,
+                "controllable": True,
+                "sub_switches": []
+            }
+        grouped[did]["sub_switches"].append({
+            "id": d["id"],
+            "name": d.get("name", "开关"),
+            "siid": d.get("siid", 2),
+            "did": did
+        })
+    
+    for group in grouped.values():
+        group["sub_switches"].sort(key=lambda x: x["siid"])
+    
+    return non_mesh_devices + list(grouped.values())
 
 DEVICE_MAP = get_device_map()
 
@@ -323,11 +324,16 @@ def start_background_refresh():
 @app.route("/")
 def index():
     devices = get_display_devices()
-    devices_meta = [
-        {"id": d["id"], "name": d["name"], "type": d["type"],
-         "controllable": d["type"] in CONTROLLABLE_TYPES}
-        for d in devices
-    ]
+    aggregated_devices = aggregate_mesh_switches(devices)
+    devices_meta = []
+    for d in aggregated_devices:
+        meta = {"id": d["id"], "name": d["name"], "type": d["type"],
+                "controllable": d.get("controllable", d["type"] in CONTROLLABLE_TYPES)}
+        if d["type"] == "mesh_switch_group":
+            meta["sub_switches"] = d.get("sub_switches", [])
+            meta["gateway_id"] = d.get("gateway_id")
+            meta["did"] = d.get("did")
+        devices_meta.append(meta)
     return render_template("index.html", devices=devices_meta)
 
 @app.route("/manage")
@@ -341,13 +347,37 @@ def api_status_all():
     
     with cache_lock:
         if device_cache:
-            return jsonify(device_cache)
+            return jsonify(build_aggregated_status(device_cache))
     
     result = query_all_devices_parallel(devices)
     with cache_lock:
         device_cache = result
         cache_last_update = time.time()
-    return jsonify(result)
+    return jsonify(build_aggregated_status(result))
+
+def build_aggregated_status(raw_status):
+    devices = get_display_devices()
+    aggregated = aggregate_mesh_switches(devices)
+    result = {}
+    
+    for d in aggregated:
+        if d["type"] == "mesh_switch_group":
+            group_status = {
+                "online": False,
+                "sub_switches": {}
+            }
+            any_online = False
+            for sub in d.get("sub_switches", []):
+                sub_status = raw_status.get(sub["id"], {"online": False, "power": None})
+                group_status["sub_switches"][sub["id"]] = sub_status
+                if sub_status.get("online"):
+                    any_online = True
+            group_status["online"] = any_online
+            result[d["id"]] = group_status
+        else:
+            result[d["id"]] = raw_status.get(d["id"], {"online": False, "power": None})
+    
+    return result
 
 @app.route("/api/status/<device_id>")
 def api_status(device_id):
@@ -360,6 +390,38 @@ def api_status(device_id):
     with cache_lock:
         if device_cache is not None:
             device_cache[device_id] = result
+    return jsonify(result)
+
+@app.route("/api/mesh/status/<mesh_group_id>")
+def api_mesh_status(mesh_group_id):
+    global device_cache
+    devices = get_display_devices()
+    aggregated = aggregate_mesh_switches(devices)
+    
+    mesh_group = None
+    for d in aggregated:
+        if d["id"] == mesh_group_id and d["type"] == "mesh_switch_group":
+            mesh_group = d
+            break
+    
+    if not mesh_group:
+        return jsonify({"error": "Mesh group not found"}), 404
+    
+    result = {"online": False, "sub_switches": {}}
+    any_online = False
+    
+    for sub in mesh_group.get("sub_switches", []):
+        sub_dev = DEVICE_MAP.get(sub["id"])
+        if sub_dev:
+            sub_status = query_single_device_status(sub_dev)
+            result["sub_switches"][sub["id"]] = sub_status
+            if sub_status.get("online"):
+                any_online = True
+            with cache_lock:
+                if device_cache is not None:
+                    device_cache[sub["id"]] = sub_status
+    
+    result["online"] = any_online
     return jsonify(result)
 
 @app.route("/api/control/<device_id>", methods=["POST"])
@@ -404,17 +466,17 @@ def api_devices_all():
 
 @app.route("/api/devices/scanned")
 def api_devices_scanned():
+    global scanned_devices_cache
     config = load_config()
-    scanned = config.get("scanned_devices", [])
     display_ids = set(config.get("display_devices", []))
     devices_info = []
-    for d in scanned:
+    for d in scanned_devices_cache:
         devices_info.append({
-            "id": d["id"],
+            "id": d.get("id", d.get("did", "")),
             "name": d["name"],
             "type": d["type"],
             "controllable": d["type"] in CONTROLLABLE_TYPES,
-            "display": d["id"] in display_ids
+            "display": d.get("id", d.get("did", "")) in display_ids
         })
     return jsonify(devices_info)
 
@@ -447,8 +509,10 @@ def api_batch_add_devices():
         config = load_config()
         existing_devices = config.get("devices", [])
         existing_ips = {d.get("ip") for d in existing_devices if d.get("ip")}
-        existing_dids = {d.get("did") for d in existing_devices if d.get("did")}
+        existing_mesh_keys = {(d.get("did"), d.get("siid")) for d in existing_devices if d.get("type") == "mesh_switch"}
         display_devices = config.get("display_devices", [])
+        gateways = {d["id"]: d for d in existing_devices if d.get("type") == "gateway"}
+        default_gateway = list(gateways.keys())[0] if gateways else None
         
         added_count = 0
         for device in devices:
@@ -460,26 +524,61 @@ def api_batch_add_devices():
             if is_ble_mesh:
                 if not did:
                     continue
-                if did in existing_dids:
-                    for d in existing_devices:
-                        if d.get("did") == did:
-                            d["name"] = device.get("name", d.get("name"))
-                            break
+                
+                parsed_did = did
+                siid = None
+                if "." in did and did.split(".")[-1].startswith("s"):
+                    parts = did.split(".")
+                    parsed_did = parts[0]
+                    try:
+                        siid = int(parts[1][1:])
+                    except ValueError:
+                        pass
+                
+                if siid is not None:
+                    mesh_key = (parsed_did, siid)
+                    if mesh_key in existing_mesh_keys:
+                        for d in existing_devices:
+                            if d.get("did") == parsed_did and d.get("siid") == siid:
+                                d["name"] = device.get("name", d.get("name"))
+                                break
+                    else:
+                        device_id = uuid.uuid4().hex[:8]
+                        new_device = {
+                            "id": device_id,
+                            "name": device.get("name", device.get("model", "新设备")),
+                            "did": parsed_did,
+                            "siid": siid,
+                            "ip": "",
+                            "token": token,
+                            "type": "mesh_switch",
+                            "gateway_id": default_gateway,
+                            "model": device.get("model")
+                        }
+                        existing_devices.append(new_device)
+                        existing_mesh_keys.add(mesh_key)
+                        added_count += 1
                 else:
-                    device_id = f"added_{uuid.uuid4().hex[:8]}"
-                    device_type = device.get("type") or get_device_type_from_model(device.get("model"))
-                    new_device = {
-                        "id": device_id,
-                        "name": device.get("name", device.get("model", "新设备")),
-                        "did": did,
-                        "ip": "",
-                        "token": token,
-                        "type": device_type,
-                        "model": device.get("model"),
-                        "is_ble_mesh": True
-                    }
-                    existing_devices.append(new_device)
-                    added_count += 1
+                    if did in {d.get("did") for d in existing_devices}:
+                        for d in existing_devices:
+                            if d.get("did") == did:
+                                d["name"] = device.get("name", d.get("name"))
+                                break
+                    else:
+                        device_id = uuid.uuid4().hex[:8]
+                        device_type = device.get("type") or get_device_type_from_model(device.get("model"))
+                        new_device = {
+                            "id": device_id,
+                            "name": device.get("name", device.get("model", "新设备")),
+                            "did": did,
+                            "ip": "",
+                            "token": token,
+                            "type": device_type,
+                            "model": device.get("model"),
+                            "is_ble_mesh": True
+                        }
+                        existing_devices.append(new_device)
+                        added_count += 1
             else:
                 if not ip or not token:
                     continue
@@ -490,7 +589,7 @@ def api_batch_add_devices():
                             d["token"] = token
                             break
                 else:
-                    device_id = f"added_{uuid.uuid4().hex[:8]}"
+                    device_id = uuid.uuid4().hex[:8]
                     device_type = device.get("type") or get_device_type_from_model(device.get("model"))
                     new_device = {
                         "id": device_id,
@@ -590,55 +689,44 @@ def api_cloud_scan():
     existing_ips = {d.get("ip") for d in existing_devices if d.get("ip")}
     existing_dids = {d.get("did") for d in existing_devices if d.get("did")}
     
-    new_devices = []
+    all_scanned = []
     for d in devices:
         device_type = get_device_type_from_model(d.get("model"))
         ip = d.get("ip")
         did = d.get("did")
         
-        if ip and ip not in existing_ips:
-            new_devices.append({
-                "name": d["name"],
-                "did": did,
-                "ip": ip,
-                "token": d["token"],
-                "mac": d["mac"],
-                "model": d["model"],
-                "type": device_type,
-                "controllable": device_type in CONTROLLABLE_TYPES
-            })
-        elif did and did not in existing_dids and not ip:
-            new_devices.append({
-                "name": d["name"],
-                "did": did,
-                "ip": "",
-                "token": d.get("token", ""),
-                "mac": d.get("mac", ""),
-                "model": d["model"],
-                "type": device_type,
-                "controllable": False,
-                "is_ble_mesh": True
-            })
+        is_existing = False
+        if ip and ip in existing_ips:
+            is_existing = True
+        elif did and did in existing_dids and not ip:
+            is_existing = True
+        
+        all_scanned.append({
+            "name": d["name"],
+            "did": did,
+            "ip": ip or "",
+            "token": d.get("token", ""),
+            "mac": d.get("mac", ""),
+            "model": d["model"],
+            "type": device_type,
+            "controllable": device_type in CONTROLLABLE_TYPES,
+            "is_existing": is_existing,
+            "is_ble_mesh": not ip and did
+        })
     
-    try:
-        config = load_config()
-        config["scanned_devices"] = new_devices
-        save_config(config)
-    except Exception:
-        pass
+    global scanned_devices_cache
+    scanned_devices_cache = all_scanned
     
     return jsonify({
         "ok": True,
-        "devices": new_devices,
-        "total": len(devices),
-        "new_count": len(new_devices)
+        "devices": all_scanned,
+        "total": len(devices)
     })
 
 @app.route("/api/cloud/scanned")
 def api_cloud_scanned():
-    config = load_config()
-    scanned = config.get("scanned_devices", [])
-    return jsonify(scanned)
+    global scanned_devices_cache
+    return jsonify(scanned_devices_cache)
 
 @app.route("/api/devices/add", methods=["POST"])
 def api_add_device():
@@ -655,7 +743,7 @@ def api_add_device():
     if not device_type:
         device_type = get_device_type_from_model(model)
     
-    device_id = f"added_{uuid.uuid4().hex[:8]}"
+    device_id = uuid.uuid4().hex[:8]
     
     new_device = {
         "id": device_id,
@@ -708,9 +796,6 @@ def api_delete_device(device_id):
     if not device_to_delete:
         return jsonify({"error": "设备不存在"}), 404
     
-    if not device_id.startswith("added_"):
-        return jsonify({"error": "只能删除通过扫描添加的设备"}), 400
-    
     devices = [d for d in devices if d["id"] != device_id]
     config["devices"] = devices
     
@@ -752,7 +837,20 @@ def api_rename_device(device_id):
     
     return jsonify({"ok": True, "name": new_name})
 
+@app.route("/api/config/reset", methods=["POST"])
+def api_reset_config():
+    global DEVICE_MAP
+    try:
+        config = {"devices": [], "display_devices": []}
+        save_config(config)
+        DEVICE_MAP = {}
+        return jsonify({"ok": True, "message": "配置已重置"})
+    except Exception as e:
+        return jsonify({"error": f"重置失败: {str(e)}"}), 500
+
 def main():
+    global DEVICE_MAP
+    DEVICE_MAP = get_device_map()
     print("启动米家控制面板，访问 http://localhost:5001")
     print("设备管理页面，访问 http://localhost:5001/manage")
     start_background_refresh()

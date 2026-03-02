@@ -71,6 +71,8 @@
     .scan-item-name { font-weight: 500; color: #333; }
     .scan-item-model { font-size: 12px; color: #888; margin-top: 4px; }
     .scan-item-ip { font-size: 11px; color: #666; margin-top: 2px; }
+    .scan-item.existing-device { opacity: 0.7; background-color: #f0f0f0; }
+    .status-tag.existing { background-color: #e0e0e0; color: #666; padding: 4px 12px; border-radius: 4px; font-size: 12px; }
     
     .type-tabs { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
     .type-tab { padding: 6px 14px; border: 1px solid #ddd; background: white; border-radius: 20px; cursor: pointer; font-size: 13px; transition: all 0.2s; color: #666; }
@@ -89,6 +91,11 @@
     .qr-status.waiting { background: #fff3e0; color: #e65100; }
     .qr-status.success { background: #e8f5e9; color: #2e7d32; }
     .qr-status.error { background: #ffebee; color: #c62828; }
+    
+    .mesh-group { margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; }
+    .mesh-group-header { background: #f5f5f5; padding: 10px 15px; font-weight: 500; color: #333; border-bottom: 1px solid #e0e0e0; }
+    .mesh-sub-item { border-left: 3px solid #007aff; margin: 0; border-radius: 0; border-top: 1px solid #eee; }
+    .mesh-sub-item:first-of-type { border-top: none; }
   </style>
 </head>
 <body>
@@ -213,7 +220,7 @@
     const TYPE_LABELS = {
       light: '灯光', airconditioner: '空调', humidifier: '加湿器',
       plug: '插座', sensor: '传感器', speaker: '音响', appliance: '家电',
-      gateway: '网关', mesh_switch: '智能开关',
+      gateway: '网关', mesh_switch: '智能开关', mesh_switch_group: '智能开关组',
     };
 
     let qrWaitTimer = null;
@@ -277,20 +284,58 @@
         return;
       }
       
-      let html = '';
+      const meshGroups = {};
+      const otherDevices = [];
       for (let i = 0; i < devices.length; i++) {
         const d = devices[i];
-        const isAdded = d.id.indexOf('added_') === 0;
-        html += '<div class="device-item ' + (isAdded ? 'added' : '') + '">' +
-          '<div class="device-info">' +
-            '<div class="device-name">' + d.name + ' ' +
-              (isAdded ? '<span class="badge badge-added">已添加</span>' : '<span class="badge badge-source">配置</span>') +
+        if (d.type === 'mesh_switch' && d.did) {
+          if (!meshGroups[d.did]) {
+            meshGroups[d.did] = [];
+          }
+          meshGroups[d.did].push(d);
+        } else {
+          otherDevices.push(d);
+        }
+      }
+      
+      let html = '';
+      
+      for (const did in meshGroups) {
+        const group = meshGroups[did];
+        const firstDevice = group[0];
+        html += '<div class="mesh-group">';
+        html += '<div class="mesh-group-header">🔌 智能开关组 (DID: ' + did + ')</div>';
+        for (let j = 0; j < group.length; j++) {
+          const d = group[j];
+          html += '<div class="device-item mesh-sub-item">' +
+            '<div class="device-info">' +
+              '<div class="device-name">' + d.name + '</div>' +
+              '<div class="device-type">' + (TYPE_LABELS[d.type] || d.type) + ' · siid:' + (d.siid || '-') + (d.controllable ? ' · 可控制' : '') + '</div>' +
             '</div>' +
+            '<div class="device-actions">' +
+              '<button class="btn btn-secondary btn-small" onclick="showRenameModal(\'' + d.id + '\', \'' + d.name + '\')">重命名</button> ' +
+              '<button class="btn btn-danger btn-small" onclick="deleteDevice(\'' + d.id + '\')">删除</button> ' +
+              '<label class="toggle-switch">' +
+                '<input type="checkbox" ' + (d.display ? 'checked' : '') + ' onchange="toggleDisplay(\'' + d.id + '\', this.checked)">' +
+                '<span class="slider"></span>' +
+              '</label>' +
+              '<span class="status ' + (d.display ? 'online' : 'offline') + '">' + (d.display ? '显示' : '隐藏') + '</span>' +
+            '</div>' +
+          '</div>';
+        }
+        html += '</div>';
+      }
+      
+      for (let i = 0; i < otherDevices.length; i++) {
+        const d = otherDevices[i];
+        html += '<div class="device-item">' +
+          '<div class="device-info">' +
+            '<div class="device-name">' + d.name + '</div>' +
             '<div class="device-type">' + (TYPE_LABELS[d.type] || d.type) + ' ' + (d.controllable ? '· 可控制' : '') + '</div>' +
           '</div>' +
           '<div class="device-actions">' +
-            (isAdded ? '<button class="btn btn-secondary btn-small" onclick="showRenameModal(\'' + d.id + '\', \'' + d.name + '\')">重命名</button> ' +
-              '<button class="btn btn-danger btn-small" onclick="deleteDevice(\'' + d.id + '\')">删除</button> ' : '') +
+            '<button class="btn btn-secondary btn-small" onclick="showRenameModal(\'' + d.id + '\', \'' + d.name + '\')">重命名</button> ' +
+            '<button class="btn btn-danger btn-small" onclick="deleteDevice(\'' + d.id + '\')">删除</button> ' +
             '<label class="toggle-switch">' +
               '<input type="checkbox" ' + (d.display ? 'checked' : '') + ' onchange="toggleDisplay(\'' + d.id + '\', this.checked)">' +
               '<span class="slider"></span>' +
@@ -437,14 +482,14 @@
           document.getElementById('scan-result').style.display = 'block';
           
           const statusEl = document.getElementById('scan-status');
-          statusEl.textContent = '扫描完成: 共 ' + scanResult.total + ' 个设备，发现 ' + scanResult.new_count + ' 个新设备';
+          statusEl.textContent = '扫描完成: 共 ' + scanResult.total + ' 个设备';
           statusEl.className = 'status online';
           
           scannedDevicesList = scanResult.devices;
           
           const devicesEl = document.getElementById('scan-devices');
           if (scanResult.devices.length === 0) {
-            devicesEl.innerHTML = '<div class="empty">没有发现新设备</div>';
+            devicesEl.innerHTML = '<div class="empty">没有扫描到设备</div>';
           } else {
             let html = '<div style="margin-bottom: 10px; display: flex; gap: 10px; align-items: center;">' +
               '<label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">' +
@@ -457,16 +502,25 @@
             for (let i = 0; i < scanResult.devices.length; i++) {
               const d = scanResult.devices[i];
               const isBleMesh = d.is_ble_mesh || !d.ip;
-              html += '<div class="scan-item">' +
+              const isExisting = d.is_existing;
+              
+              let actionBtn = '';
+              if (isExisting) {
+                actionBtn = '<span class="status-tag existing">已添加</span>';
+              } else {
+                actionBtn = '<button class="btn btn-success btn-small" onclick="addScannedDevice(' + i + ')">添加</button>';
+              }
+              
+              html += '<div class="scan-item' + (isExisting ? ' existing-device' : '') + '">' +
                 '<div style="display: flex; align-items: center; gap: 10px;">' +
-                  '<input type="checkbox" class="device-checkbox" data-index="' + i + '" onchange="updateBatchButton()">' +
+                  (isExisting ? '' : '<input type="checkbox" class="device-checkbox" data-index="' + i + '" onchange="updateBatchButton()">') +
                   '<div class="scan-item-info">' +
                     '<div class="scan-item-name">' + d.name + (isBleMesh ? ' <span style="font-size:10px;color:#888;">(蓝牙Mesh)</span>' : '') + '</div>' +
                     '<div class="scan-item-model">' + (d.model || '未知型号') + '</div>' +
                     '<div class="scan-item-ip">' + (d.ip || '无IP地址') + '</div>' +
                   '</div>' +
                 '</div>' +
-                '<button class="btn btn-success btn-small" onclick="addScannedDevice(' + i + ')">添加</button>' +
+                actionBtn +
               '</div>';
             }
             devicesEl.innerHTML = html;
@@ -497,7 +551,10 @@
       const devices = [];
       for (let i = 0; i < checkboxes.length; i++) {
         const index = parseInt(checkboxes[i].dataset.index);
-        devices.push(scannedDevicesList[index]);
+        const device = scannedDevicesList[index];
+        if (!device.is_existing) {
+          devices.push(device);
+        }
       }
       return devices;
     }
