@@ -24,6 +24,7 @@ def main():
         '--add-data=app.py:.',
         '--add-data=service.py:.',
         '--add-data=token_extractor.py:.',
+        '--add-data=mijia_cloud.py:.',
         '--hidden-import=flask',
         '--hidden-import=miio',
         '--hidden-import=miio.device',

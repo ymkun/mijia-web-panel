@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import warnings
+import uuid
 
 warnings.filterwarnings("ignore")
 
@@ -20,7 +21,11 @@ CONFIG_FILE = CONFIG_DIR / "devices_config.json"
 
 CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
-ALL_DEVICES = [
+from mijia_cloud import MijiaCloudConnector
+
+cloud_connector = MijiaCloudConnector(CONFIG_DIR)
+
+DEFAULT_DEVICES = [
     {"id": "light_living",   "name": "护眼客厅吸顶灯", "ip": "192.168.3.19",  "token": "ac572d894b94f6ff9152b0d4b83620e8", "type": "light"},
     {"id": "light_master",   "name": "护眼吸顶灯(主卧)", "ip": "192.168.3.18", "token": "e71ca3aa999c0915bb35dcfd129ee833",  "type": "light"},
     {"id": "light_second",   "name": "护眼吸顶灯(次卧)", "ip": "192.168.3.20", "token": "7744f2b0e25fa12a4c89e0665188ceff",  "type": "light"},
@@ -57,6 +62,63 @@ ALL_DEVICES = [
 CONTROLLABLE_TYPES = {"light", "airconditioner", "humidifier", "plug", "mesh_switch"}
 AIR_PROPS = ["co2", "humidity", "temperature", "pm25", "tvoc"]
 
+MODEL_TYPE_MAP = {
+    "yeelink.": "light",
+    "zhimi.airpurifier.": "airconditioner",
+    "zhimi.humidifier.": "humidifier",
+    "zhimi.airmonitor.": "sensor",
+    "lumi.gateway.": "gateway",
+    "lumi.sensor_": "sensor",
+    "cuco.plug.": "plug",
+    "chuangmi.plug.": "plug",
+    "qmi.powerstrip.": "plug",
+    "xiaomi.aircondition.": "airconditioner",
+    "xiaomi.airpurifier.": "airconditioner",
+    "xiaomi.humidifier.": "humidifier",
+    "xiaomi.relay.": "plug",
+    "xiaomi.wifispeaker.": "speaker",
+    "xiaomi.smartpad.": "speaker",
+    "mijia.camera.": "sensor",
+    "mijia.vacuum.": "appliance",
+    "roborock.vacuum.": "appliance",
+    "dreame.vacuum.": "appliance",
+    "viomi.vacuum.": "appliance",
+    "viomi.waterheater.": "appliance",
+    "viomi.fridge.": "appliance",
+    "viomi.hood.": "appliance",
+    "mmgg.feeder.": "appliance",
+    "mmgg.pet_waterer.": "appliance",
+    "yunmi.waterheater.": "appliance",
+    "yunmi.kettle.": "appliance",
+    "zhimi.heater.": "airconditioner",
+    "leshow.heater.": "airconditioner",
+    "leshow.fan.": "airconditioner",
+    "dmaker.fan.": "airconditioner",
+    "zhimi.fan.": "airconditioner",
+    "roome.fan.": "airconditioner",
+    "isa.camera.": "sensor",
+    "isa.kettle.": "appliance",
+    "shuii.humidifier.": "humidifier",
+    "deerma.humidifier.": "humidifier",
+    "nwt.derh.": "humidifier",
+    "nwt.wetscrub.": "appliance",
+    "tinymu.toiletlid.": "appliance",
+    "mrbond.airer.": "appliance",
+    "dooya.curtain.": "appliance",
+    "giot.curtain.": "appliance",
+    "lumi.curtain.": "appliance",
+    "lumi.airrtc.": "airconditioner",
+    "lumi.ctrl_": "mesh_switch",
+    "lumi.switch.": "mesh_switch",
+    "zimi.powerstrip.": "plug",
+    "huayi.light.": "light",
+    "opple.light.": "light",
+    "philips.light.": "light",
+    "philips.lightstrip.": "light",
+    "mijia.light.": "light",
+    "mesh_switch": "mesh_switch",
+}
+
 device_cache = {}
 cache_lock = threading.Lock()
 cache_last_update = 0
@@ -66,29 +128,46 @@ def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    return {"display_devices": [d["id"] for d in ALL_DEVICES], "scanned_devices": []}
+    return {
+        "devices": DEFAULT_DEVICES,
+        "display_devices": [d["id"] for d in DEFAULT_DEVICES]
+    }
 
 def save_config(config):
     with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
 
+def get_all_devices():
+    config = load_config()
+    return config.get("devices", DEFAULT_DEVICES)
+
+def get_device_type_from_model(model):
+    if not model:
+        return "appliance"
+    for model_prefix, device_type in MODEL_TYPE_MAP.items():
+        if model.startswith(model_prefix):
+            return device_type
+    return "appliance"
+
 def get_display_devices():
     config = load_config()
+    all_devices = get_all_devices()
     display_ids = set(config.get("display_devices", []))
-    devices = [d for d in ALL_DEVICES if d["id"] in display_ids]
+    devices = [d for d in all_devices if d["id"] in display_ids]
     
-    for d in ALL_DEVICES:
+    for d in all_devices:
         if d.get("type") == "gateway" and d["id"] not in display_ids:
             devices.append(d)
     
-    for d in ALL_DEVICES:
+    for d in all_devices:
         if d.get("id") == "sensor_air" and d["id"] not in display_ids:
             devices.append(d)
     
     return devices
 
 def get_device_map():
-    return {d["id"]: d for d in ALL_DEVICES}
+    all_devices = get_all_devices()
+    return {d["id"]: d for d in all_devices}
 
 DEVICE_MAP = get_device_map()
 
@@ -310,9 +389,10 @@ def api_control(device_id):
 @app.route("/api/devices/all")
 def api_devices_all():
     config = load_config()
+    all_devices = get_all_devices()
     display_ids = set(config.get("display_devices", []))
     devices_info = []
-    for d in ALL_DEVICES:
+    for d in all_devices:
         devices_info.append({
             "id": d["id"],
             "name": d["name"],
@@ -358,6 +438,222 @@ def api_set_display():
 @app.route("/api/devices/scan", methods=["POST"])
 def api_scan_devices():
     return jsonify({"ok": True, "message": "扫描功能暂不可用"})
+
+@app.route("/api/cloud/status")
+def api_cloud_status():
+    has_credentials = cloud_connector.load_credentials()
+    return jsonify({
+        "has_credentials": has_credentials,
+        "username": cloud_connector._username if has_credentials else None
+    })
+
+@app.route("/api/cloud/qr", methods=["POST"])
+def api_cloud_qr():
+    info = cloud_connector.get_qr_login_info()
+    if info:
+        return jsonify({"ok": True, "login_url": info["login_url"]})
+    return jsonify({"error": "获取二维码失败"}), 500
+
+@app.route("/api/cloud/qr/image")
+def api_cloud_qr_image():
+    image_data = cloud_connector.get_qr_image()
+    if image_data:
+        from flask import Response
+        return Response(image_data, mimetype='image/png')
+    return jsonify({"error": "获取二维码图片失败"}), 500
+
+@app.route("/api/cloud/qr/wait", methods=["POST"])
+def api_cloud_qr_wait():
+    success, message = cloud_connector.wait_for_qr_scan()
+    if success:
+        cloud_connector.save_credentials()
+        return jsonify({"ok": True, "message": message})
+    return jsonify({"ok": False, "error": message}), 401
+
+@app.route("/api/cloud/qr/check", methods=["POST"])
+def api_cloud_qr_check():
+    success, message = cloud_connector.check_qr_status()
+    if success is None:
+        return jsonify({"status": "waiting", "message": message})
+    elif success:
+        try:
+            cloud_connector.save_credentials()
+        except Exception:
+            pass
+        return jsonify({"status": "success", "message": message})
+    else:
+        return jsonify({"status": "error", "error": message})
+
+@app.route("/api/cloud/login", methods=["POST"])
+def api_cloud_login():
+    success, message = cloud_connector.login()
+    if success:
+        return jsonify({"ok": True, "message": message})
+    return jsonify({"ok": False, "error": message}), 401
+
+@app.route("/api/cloud/scan", methods=["POST"])
+def api_cloud_scan():
+    if not cloud_connector._serviceToken:
+        if not cloud_connector.load_credentials():
+            return jsonify({"error": "请先登录米家账号"}), 401
+        success, message = cloud_connector.login()
+        if not success:
+            return jsonify({"error": message}), 401
+    
+    devices = cloud_connector.scan_all_devices()
+    if devices is None:
+        return jsonify({"error": "扫描设备失败，请重新登录"}), 500
+    
+    existing_devices = get_all_devices()
+    existing_ips = {d.get("ip") for d in existing_devices if d.get("ip")}
+    existing_dids = {d.get("did") for d in existing_devices if d.get("did")}
+    
+    new_devices = []
+    for d in devices:
+        if d.get("ip") and d["ip"] not in existing_ips:
+            device_type = get_device_type_from_model(d.get("model"))
+            new_devices.append({
+                "name": d["name"],
+                "did": d["did"],
+                "ip": d["ip"],
+                "token": d["token"],
+                "mac": d["mac"],
+                "model": d["model"],
+                "type": device_type,
+                "controllable": device_type in CONTROLLABLE_TYPES
+            })
+    
+    try:
+        config = load_config()
+        config["scanned_devices"] = new_devices
+        save_config(config)
+    except Exception:
+        pass
+    
+    return jsonify({
+        "ok": True,
+        "devices": new_devices,
+        "total": len(devices),
+        "new_count": len(new_devices)
+    })
+
+@app.route("/api/cloud/scanned")
+def api_cloud_scanned():
+    config = load_config()
+    scanned = config.get("scanned_devices", [])
+    return jsonify(scanned)
+
+@app.route("/api/devices/add", methods=["POST"])
+def api_add_device():
+    body = request.get_json() or {}
+    name = body.get("name")
+    ip = body.get("ip")
+    token = body.get("token")
+    model = body.get("model")
+    device_type = body.get("type")
+    
+    if not ip or not token:
+        return jsonify({"error": "缺少必要参数"}), 400
+    
+    if not device_type:
+        device_type = get_device_type_from_model(model)
+    
+    device_id = f"added_{uuid.uuid4().hex[:8]}"
+    
+    new_device = {
+        "id": device_id,
+        "name": name or model or "新设备",
+        "ip": ip,
+        "token": token,
+        "type": device_type,
+        "model": model
+    }
+    
+    try:
+        config = load_config()
+        devices = config.get("devices", [])
+        
+        for d in devices:
+            if d.get("ip") == ip:
+                d["name"] = new_device["name"]
+                d["token"] = token
+                d["type"] = device_type
+                save_config(config)
+                global DEVICE_MAP
+                DEVICE_MAP = get_device_map()
+                return jsonify({"ok": True, "device": d, "updated": True})
+        
+        devices.append(new_device)
+        config["devices"] = devices
+        
+        if device_id not in config.get("display_devices", []):
+            config["display_devices"] = config.get("display_devices", []) + [device_id]
+        
+        save_config(config)
+        
+        DEVICE_MAP = get_device_map()
+        
+        return jsonify({"ok": True, "device": new_device, "updated": False})
+    except Exception as e:
+        return jsonify({"error": f"添加设备失败: {str(e)}"}), 500
+
+@app.route("/api/devices/delete/<device_id>", methods=["POST"])
+def api_delete_device(device_id):
+    config = load_config()
+    devices = config.get("devices", [])
+    
+    device_to_delete = None
+    for d in devices:
+        if d["id"] == device_id:
+            device_to_delete = d
+            break
+    
+    if not device_to_delete:
+        return jsonify({"error": "设备不存在"}), 404
+    
+    if not device_id.startswith("added_"):
+        return jsonify({"error": "只能删除通过扫描添加的设备"}), 400
+    
+    devices = [d for d in devices if d["id"] != device_id]
+    config["devices"] = devices
+    
+    if device_id in config.get("display_devices", []):
+        config["display_devices"] = [d for d in config.get("display_devices", []) if d != device_id]
+    
+    save_config(config)
+    
+    global DEVICE_MAP
+    DEVICE_MAP = get_device_map()
+    
+    return jsonify({"ok": True})
+
+@app.route("/api/devices/rename/<device_id>", methods=["POST"])
+def api_rename_device(device_id):
+    body = request.get_json() or {}
+    new_name = body.get("name")
+    
+    if not new_name:
+        return jsonify({"error": "请提供新名称"}), 400
+    
+    config = load_config()
+    devices = config.get("devices", [])
+    
+    found = False
+    for d in devices:
+        if d["id"] == device_id:
+            d["name"] = new_name
+            found = True
+            break
+    
+    if not found:
+        return jsonify({"error": "设备不存在或无法重命名"}), 404
+    
+    save_config(config)
+    
+    global DEVICE_MAP
+    DEVICE_MAP = get_device_map()
+    
+    return jsonify({"ok": True, "name": new_name})
 
 def main():
     print("启动米家控制面板，访问 http://localhost:5001")

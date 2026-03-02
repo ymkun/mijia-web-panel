@@ -17,6 +17,8 @@
     .device-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
     .device-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #f9f9f9; border-radius: 8px; border: 1px solid #eee; }
     .device-item:hover { background: #f0f0f0; }
+    .device-item.added { border-left: 3px solid #4caf50; }
+    .device-item.new { border-left: 3px solid #ff9800; }
     .device-info { flex: 1; }
     .device-name { font-weight: 500; color: #333; margin-bottom: 4px; }
     .device-type { font-size: 12px; color: #888; }
@@ -30,14 +32,68 @@
     .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
     .btn-primary { background: #007aff; color: white; }
     .btn-primary:hover { background: #0056b3; }
+    .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
     .btn-secondary { background: #f0f0f0; color: #333; }
     .btn-secondary:hover { background: #e0e0e0; }
+    .btn-success { background: #4caf50; color: white; }
+    .btn-success:hover { background: #388e3c; }
+    .btn-danger { background: #f44336; color: white; }
+    .btn-danger:hover { background: #d32f2f; }
+    .btn-small { padding: 5px 10px; font-size: 12px; }
     .actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .status { font-size: 12px; color: #888; }
     .status.online { color: #4caf50; }
     .status.offline { color: #f44336; }
     .loading { text-align: center; padding: 40px; color: #888; }
     .empty { text-align: center; padding: 40px; color: #888; }
+    
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+    .modal.show { display: flex; }
+    .modal-content { background: white; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-header h3 { margin: 0; }
+    .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #888; }
+    .modal-close:hover { color: #333; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: 500; color: #333; }
+    .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #007aff; }
+    .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+    .badge-new { background: #fff3e0; color: #e65100; }
+    .badge-added { background: #e8f5e9; color: #2e7d32; }
+    .badge-source { background: #e3f2fd; color: #1565c0; }
+    
+    .scan-result { margin-top: 15px; }
+    .scan-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #f9f9f9; border-radius: 8px; margin-bottom: 10px; border: 1px solid #eee; }
+    .scan-item-info { flex: 1; }
+    .scan-item-name { font-weight: 500; color: #333; }
+    .scan-item-model { font-size: 12px; color: #888; margin-top: 4px; }
+    .scan-item-ip { font-size: 11px; color: #666; margin-top: 2px; }
+    
+    .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+    .tab { padding: 10px 20px; border: none; background: #f0f0f0; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .tab.active { background: #007aff; color: white; }
+    .tab:hover:not(.active) { background: #e0e0e0; }
+    
+    .type-tabs { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
+    .type-tab { padding: 6px 14px; border: 1px solid #ddd; background: white; border-radius: 20px; cursor: pointer; font-size: 13px; transition: all 0.2s; color: #666; }
+    .type-tab.active { background: #007aff; color: white; border-color: #007aff; }
+    .type-tab:hover:not(.active) { background: #f5f5f5; border-color: #bbb; }
+    .type-tab .count { margin-left: 4px; font-size: 11px; opacity: 0.8; }
+    
+    .input-row { display: flex; gap: 10px; }
+    .input-row .form-group { flex: 1; }
+    
+    .qr-container { text-align: center; padding: 20px; }
+    .qr-image { max-width: 280px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .qr-link { margin-top: 15px; }
+    .qr-link a { color: #007aff; word-break: break-all; }
+    .qr-status { margin-top: 15px; padding: 10px; border-radius: 8px; background: #f0f0f0; }
+    .qr-status.waiting { background: #fff3e0; color: #e65100; }
+    .qr-status.success { background: #e8f5e9; color: #2e7d32; }
+    .qr-status.error { background: #ffebee; color: #c62828; }
   </style>
 </head>
 <body>
@@ -48,17 +104,112 @@
     </div>
     
     <div class="actions">
-      <div>
-        <button class="btn btn-primary" onclick="scanDevices()">扫描新设备</button>
-        <button class="btn btn-secondary" onclick="loadDevices()">刷新列表</button>
-      </div>
+      <button class="btn btn-primary" onclick="showScanModal()">从米家扫描新设备</button>
       <div class="status" id="status"></div>
     </div>
 
-    <div class="section">
-      <h2>已配置设备</h2>
+    <div class="type-tabs" id="type-tabs"></div>
+
+    <div class="section" id="devices-section">
+      <h2 id="section-title">已配置设备</h2>
       <div id="device-list" class="device-list">
         <div class="loading">加载中...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="scanModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>从米家扫描设备</h3>
+        <button class="modal-close" onclick="closeScanModal()">&times;</button>
+      </div>
+      
+      <div id="qr-section" class="qr-container">
+        <p style="margin-bottom: 15px; color: #666;">点击下方按钮获取二维码，使用米家APP扫码登录</p>
+        <button class="btn btn-primary" onclick="getQRCode()" id="get-qr-btn">获取登录二维码</button>
+        <div id="qr-display" style="display: none;">
+          <img id="qr-image" class="qr-image" src="" alt="登录二维码">
+          <p style="font-size: 13px; color: #666; margin-top: 15px;">请使用 <strong>米家APP</strong> 扫描上方二维码登录</p>
+          <div class="qr-link" style="margin-top: 10px;">
+            <p style="font-size: 12px; color: #888; margin-bottom: 5px;">或点击链接登录：</p>
+            <a id="qr-link" href="" target="_blank" rel="noopener noreferrer" style="color: #007aff; word-break: break-all;"></a>
+          </div>
+          <div id="qr-status" class="qr-status waiting" style="margin-top: 10px;">
+            等待扫码...
+          </div>
+        </div>
+      </div>
+      
+      <div id="scan-result" style="display: none;">
+        <div id="scan-status" class="status"></div>
+        <div id="scan-devices" class="scan-result"></div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="closeScanModal()">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="addModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>添加设备</h3>
+        <button class="modal-close" onclick="closeAddModal()">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>设备名称</label>
+        <input type="text" id="add-name" placeholder="给设备起个名字">
+      </div>
+      <div class="input-row">
+        <div class="form-group">
+          <label>IP 地址</label>
+          <input type="text" id="add-ip" placeholder="192.168.x.x" readonly>
+        </div>
+        <div class="form-group">
+          <label>设备类型</label>
+          <select id="add-type">
+            <option value="light">灯光</option>
+            <option value="airconditioner">空调</option>
+            <option value="humidifier">加湿器</option>
+            <option value="plug">插座</option>
+            <option value="sensor">传感器</option>
+            <option value="speaker">音响</option>
+            <option value="appliance">家电</option>
+            <option value="gateway">网关</option>
+            <option value="mesh_switch">智能开关</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Token</label>
+        <input type="text" id="add-token" readonly>
+      </div>
+      <div class="form-group">
+        <label>型号</label>
+        <input type="text" id="add-model" readonly>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeAddModal()">取消</button>
+        <button class="btn btn-success" onclick="addDevice()">添加设备</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="renameModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>重命名设备</h3>
+        <button class="modal-close" onclick="closeRenameModal()">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>新名称</label>
+        <input type="text" id="rename-name" placeholder="输入新名称">
+      </div>
+      <input type="hidden" id="rename-device-id">
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeRenameModal()">取消</button>
+        <button class="btn btn-primary" onclick="renameDevice()">保存</button>
       </div>
     </div>
   </div>
@@ -70,40 +221,87 @@
       gateway: '网关', mesh_switch: '智能开关',
     };
 
+    let qrWaitTimer = null;
+    let allDevices = [];
+    let currentType = 'all';
+
     async function loadDevices() {
       const statusEl = document.getElementById('status');
       statusEl.textContent = '加载中...';
       
       try {
         const response = await fetch('/api/devices/all');
-        const devices = await response.json();
+        allDevices = await response.json();
         
-        const listEl = document.getElementById('device-list');
-        if (devices.length === 0) {
-          listEl.innerHTML = '<div class="empty">暂无设备</div>';
-          return;
-        }
-        
-        listEl.innerHTML = devices.map(d => `
-          <div class="device-item">
-            <div class="device-info">
-              <div class="device-name">${d.name}</div>
-              <div class="device-type">${TYPE_LABELS[d.type] || d.type} ${d.controllable ? '· 可控制' : ''}</div>
-            </div>
-            <div class="device-actions">
-              <label class="toggle-switch">
-                <input type="checkbox" ${d.display ? 'checked' : ''} onchange="toggleDisplay('${d.id}', this.checked)">
-                <span class="slider"></span>
-              </label>
-              <span class="status ${d.display ? 'online' : 'offline'}">${d.display ? '显示' : '隐藏'}</span>
-            </div>
-          </div>
-        `).join('');
-        
-        statusEl.textContent = `共 ${devices.length} 个设备`;
+        renderTypeTabs();
+        renderDevices(getFilteredDevices());
+        statusEl.textContent = `共 ${allDevices.length} 个设备`;
       } catch (e) {
         statusEl.textContent = '加载失败: ' + e.message;
       }
+    }
+
+    function getFilteredDevices() {
+      if (currentType === 'all') return allDevices;
+      return allDevices.filter(d => d.type === currentType);
+    }
+
+    function renderTypeTabs() {
+      const typeCounts = { all: allDevices.length };
+      for (const d of allDevices) {
+        typeCounts[d.type] = (typeCounts[d.type] || 0) + 1;
+      }
+      
+      const tabsEl = document.getElementById('type-tabs');
+      let html = `<button class="type-tab ${currentType === 'all' ? 'active' : ''}" onclick="filterByType('all')">全部<span class="count">${typeCounts.all}</span></button>`;
+      
+      const sortedTypes = Object.keys(typeCounts)
+        .filter(t => t !== 'all')
+        .sort((a, b) => typeCounts[b] - typeCounts[a]);
+      
+      for (const type of sortedTypes) {
+        const label = TYPE_LABELS[type] || type;
+        html += `<button class="type-tab ${currentType === type ? 'active' : ''}" onclick="filterByType('${type}')">${label}<span class="count">${typeCounts[type]}</span></button>`;
+      }
+      
+      tabsEl.innerHTML = html;
+    }
+
+    function filterByType(type) {
+      currentType = type;
+      renderTypeTabs();
+      renderDevices(getFilteredDevices());
+    }
+
+    function renderDevices(devices) {
+      const listEl = document.getElementById('device-list');
+      if (devices.length === 0) {
+        listEl.innerHTML = '<div class="empty">暂无设备</div>';
+        return;
+      }
+      
+      listEl.innerHTML = devices.map(d => `
+        <div class="device-item ${d.id.startsWith('added_') ? 'added' : ''}">
+          <div class="device-info">
+            <div class="device-name">
+              ${d.name}
+              ${d.id.startsWith('added_') ? '<span class="badge badge-added">已添加</span>' : '<span class="badge badge-source">配置</span>'}
+            </div>
+            <div class="device-type">${TYPE_LABELS[d.type] || d.type} ${d.controllable ? '· 可控制' : ''}</div>
+          </div>
+          <div class="device-actions">
+            ${d.id.startsWith('added_') ? `
+              <button class="btn btn-secondary btn-small" onclick="showRenameModal('${d.id}', '${d.name}')">重命名</button>
+              <button class="btn btn-danger btn-small" onclick="deleteDevice('${d.id}')">删除</button>
+            ` : ''}
+            <label class="toggle-switch">
+              <input type="checkbox" ${d.display ? 'checked' : ''} onchange="toggleDisplay('${d.id}', this.checked)">
+              <span class="slider"></span>
+            </label>
+            <span class="status ${d.display ? 'online' : 'offline'}">${d.display ? '显示' : '隐藏'}</span>
+          </div>
+        </div>
+      `).join('');
     }
 
     async function toggleDisplay(deviceId, display) {
@@ -124,20 +322,286 @@
       }
     }
 
-    async function scanDevices() {
-      const statusEl = document.getElementById('status');
-      statusEl.textContent = '正在扫描设备...';
-      
+    function showScanModal() {
+      document.getElementById('scanModal').classList.add('show');
+      document.getElementById('qr-section').style.display = 'block';
+      document.getElementById('scan-result').style.display = 'none';
+      document.getElementById('get-qr-btn').style.display = 'inline-block';
+      document.getElementById('qr-display').style.display = 'none';
+      checkCloudStatus();
+    }
+
+    function closeScanModal() {
+      document.getElementById('scanModal').classList.remove('show');
+      if (qrWaitTimer) {
+        clearTimeout(qrWaitTimer);
+        qrWaitTimer = null;
+      }
+    }
+
+    async function checkCloudStatus() {
       try {
-        const response = await fetch('/api/devices/scan', { method: 'POST' });
+        const response = await fetch('/api/cloud/status');
         const result = await response.json();
-        if (result.ok) {
-          statusEl.textContent = result.message;
-        } else {
-          statusEl.textContent = '扫描失败: ' + (result.error || '未知错误');
+        if (result.has_credentials) {
+          document.getElementById('get-qr-btn').textContent = '重新获取二维码';
         }
       } catch (e) {
-        statusEl.textContent = '扫描失败: ' + e.message;
+        console.error('检查登录状态失败:', e);
+      }
+    }
+
+    async function getQRCode() {
+      const btn = document.getElementById('get-qr-btn');
+      btn.disabled = true;
+      btn.textContent = '获取中...';
+      
+      try {
+        const response = await fetch('/api/cloud/qr', { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.ok) {
+          document.getElementById('qr-image').src = '/api/cloud/qr/image?t=' + Date.now();
+          const qrLink = document.getElementById('qr-link');
+          if (result.login_url) {
+            qrLink.href = result.login_url;
+            qrLink.textContent = '点击此处在新窗口登录';
+            qrLink.parentElement.style.display = 'block';
+          } else {
+            qrLink.parentElement.style.display = 'none';
+          }
+          document.getElementById('get-qr-btn').style.display = 'none';
+          document.getElementById('qr-display').style.display = 'block';
+          
+          const statusEl = document.getElementById('qr-status');
+          statusEl.className = 'qr-status waiting';
+          statusEl.textContent = '等待扫码...';
+          
+          waitForQRScan();
+        } else {
+          alert('获取二维码失败: ' + (result.error || '未知错误'));
+          btn.disabled = false;
+          btn.textContent = '获取登录二维码';
+        }
+      } catch (e) {
+        alert('获取二维码失败: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = '获取登录二维码';
+      }
+    }
+
+    async function waitForQRScan() {
+      const statusEl = document.getElementById('qr-status');
+      
+      try {
+        const response = await fetch('/api/cloud/qr/check', { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.status === 'waiting') {
+          statusEl.className = 'qr-status waiting';
+          statusEl.textContent = '等待扫码...';
+          qrWaitTimer = setTimeout(waitForQRScan, 2000);
+        } else if (result.status === 'success') {
+          statusEl.className = 'qr-status success';
+          statusEl.textContent = '登录成功！正在扫描设备...';
+          setTimeout(() => {
+            startScan();
+          }, 500);
+        } else {
+          statusEl.className = 'qr-status error';
+          statusEl.textContent = result.error || '登录失败';
+          qrWaitTimer = setTimeout(() => {
+            document.getElementById('get-qr-btn').style.display = 'inline-block';
+            document.getElementById('get-qr-btn').disabled = false;
+            document.getElementById('get-qr-btn').textContent = '重新获取二维码';
+            document.getElementById('qr-display').style.display = 'none';
+          }, 2000);
+        }
+      } catch (e) {
+        statusEl.className = 'qr-status error';
+        statusEl.textContent = '网络错误: ' + e.message;
+        qrWaitTimer = setTimeout(() => {
+          document.getElementById('get-qr-btn').style.display = 'inline-block';
+          document.getElementById('get-qr-btn').disabled = false;
+          document.getElementById('get-qr-btn').textContent = '重新获取二维码';
+          document.getElementById('qr-display').style.display = 'none';
+        }, 2000);
+      }
+    }
+
+    async function startScan() {
+      try {
+        const scanResponse = await fetch('/api/cloud/scan', { method: 'POST' });
+        const scanResult = await scanResponse.json();
+        
+        if (scanResult.error) {
+          alert('扫描失败: ' + scanResult.error);
+        } else {
+          document.getElementById('qr-section').style.display = 'none';
+          document.getElementById('scan-result').style.display = 'block';
+          
+          const statusEl = document.getElementById('scan-status');
+          statusEl.textContent = `扫描完成: 共 ${scanResult.total} 个设备，发现 ${scanResult.new_count} 个新设备`;
+          statusEl.className = 'status online';
+          
+          const devicesEl = document.getElementById('scan-devices');
+          if (scanResult.devices.length === 0) {
+            devicesEl.innerHTML = '<div class="empty">没有发现新设备</div>';
+          } else {
+            devicesEl.innerHTML = scanResult.devices.map(d => `
+              <div class="scan-item">
+                <div class="scan-item-info">
+                  <div class="scan-item-name">${d.name}</div>
+                  <div class="scan-item-model">${d.model || '未知型号'}</div>
+                  <div class="scan-item-ip">${d.ip}</div>
+                </div>
+                <button class="btn btn-success btn-small" onclick='addScannedDevice(${JSON.stringify(d)})'>添加</button>
+              </div>
+            `).join('');
+          }
+        }
+      } catch (e) {
+        alert('扫描失败: ' + e.message);
+      }
+    }
+
+    async function addScannedDevice(device) {
+      const name = prompt('请输入设备名称:', device.name);
+      if (!name) return;
+      
+      try {
+        const response = await fetch('/api/devices/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name,
+            ip: device.ip,
+            token: device.token,
+            model: device.model,
+            type: device.type
+          })
+        });
+        const result = await response.json();
+        
+        if (result.ok) {
+          alert(result.updated ? '设备已更新' : '设备添加成功');
+          closeScanModal();
+          loadDevices();
+        } else {
+          alert('添加失败: ' + (result.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('添加失败: ' + e.message);
+      }
+    }
+
+    function showAddModal(device) {
+      document.getElementById('addModal').classList.add('show');
+      document.getElementById('add-name').value = device.name || '';
+      document.getElementById('add-ip').value = device.ip || '';
+      document.getElementById('add-token').value = device.token || '';
+      document.getElementById('add-model').value = device.model || '';
+      document.getElementById('add-type').value = device.type || 'appliance';
+    }
+
+    function closeAddModal() {
+      document.getElementById('addModal').classList.remove('show');
+    }
+
+    async function addDevice() {
+      const name = document.getElementById('add-name').value;
+      const ip = document.getElementById('add-ip').value;
+      const token = document.getElementById('add-token').value;
+      const model = document.getElementById('add-model').value;
+      const type = document.getElementById('add-type').value;
+      
+      if (!name) {
+        alert('请输入设备名称');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/devices/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, ip, token, model, type })
+        });
+        const result = await response.json();
+        
+        if (result.ok) {
+          alert(result.updated ? '设备已更新' : '设备添加成功');
+          closeAddModal();
+          loadScannedDevices();
+        } else {
+          alert('添加失败: ' + (result.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('添加失败: ' + e.message);
+      }
+    }
+
+    function showRenameModal(deviceId, currentName) {
+      document.getElementById('renameModal').classList.add('show');
+      document.getElementById('rename-device-id').value = deviceId;
+      document.getElementById('rename-name').value = currentName;
+    }
+
+    function closeRenameModal() {
+      document.getElementById('renameModal').classList.remove('show');
+    }
+
+    async function renameDevice() {
+      const deviceId = document.getElementById('rename-device-id').value;
+      const newName = document.getElementById('rename-name').value;
+      
+      if (!newName) {
+        alert('请输入新名称');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`/api/devices/rename/${deviceId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newName })
+        });
+        const result = await response.json();
+        
+        if (result.ok) {
+          closeRenameModal();
+          if (currentTab === 'added') {
+            loadAddedDevices();
+          } else {
+            loadDevices();
+          }
+        } else {
+          alert('重命名失败: ' + (result.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('重命名失败: ' + e.message);
+      }
+    }
+
+    async function deleteDevice(deviceId) {
+      if (!confirm('确定要删除这个设备吗？')) return;
+      
+      try {
+        const response = await fetch(`/api/devices/delete/${deviceId}`, {
+          method: 'POST'
+        });
+        const result = await response.json();
+        
+        if (result.ok) {
+          if (currentTab === 'added') {
+            loadAddedDevices();
+          } else {
+            loadDevices();
+          }
+        } else {
+          alert('删除失败: ' + (result.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('删除失败: ' + e.message);
       }
     }
 
