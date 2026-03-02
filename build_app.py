@@ -21,6 +21,7 @@ def main():
         '--onedir',
         '--windowed',
         '--add-data=templates:templates',
+        '--add-data=app.py:.',
         '--add-data=token_extractor.py:.',
         '--hidden-import=flask',
         '--hidden-import=miio',

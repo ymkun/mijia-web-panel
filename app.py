@@ -7,6 +7,9 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import warnings
+
+warnings.filterwarnings("ignore")
 
 from flask import Flask, jsonify, request, render_template
 
@@ -52,6 +55,7 @@ ALL_DEVICES = [
 ]
 
 CONTROLLABLE_TYPES = {"light", "airconditioner", "humidifier", "plug", "mesh_switch"}
+AIR_PROPS = ["co2", "humidity", "temperature", "pm25", "tvoc"]
 
 device_cache = {}
 cache_lock = threading.Lock()
@@ -88,48 +92,31 @@ def get_device_map():
 
 DEVICE_MAP = get_device_map()
 
-_MIIO_GET_ALL_PARALLEL = """
-import warnings; warnings.filterwarnings("ignore")
-import json, sys
 from miio import Device
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
 
-devices = json.loads(sys.argv[1])
-results = {}
-results_lock = threading.Lock()
-AIR_PROPS = ["co2", "humidity", "temperature", "pm25", "tvoc"]
-gateway_map = {d["id"]: d for d in devices if d.get("type") == "gateway"}
-
-def query_gateway_mesh_devices(gateway_id, gateway_info, mesh_devices):
-    gateway_results = {}
-    try:
-        dev = Device(ip=gateway_info["ip"], token=gateway_info["token"], timeout=5)
-        props_list = [{"siid": d.get("siid", 2), "piid": 1, "did": d.get("did")} for d in mesh_devices]
-        props = dev.send("get_properties", props_list, retry_count=2)
-        if isinstance(props, list):
-            for i, p in enumerate(props):
-                if i < len(mesh_devices):
-                    d = mesh_devices[i]
-                    if p.get("code") == 0:
-                        gateway_results[d["id"]] = {"online": True, "power": p.get("value")}
-                    else:
-                        gateway_results[d["id"]] = {"online": True, "power": None}
-    except Exception:
-        for d in mesh_devices:
-            gateway_results[d["id"]] = {"online": False, "power": None}
-    return gateway_results
-
-def query_single(d):
+def query_single_device(d, gateway_map):
     device_result = {"online": False, "power": None}
     try:
         if d.get("type") == "gateway":
             try:
                 dev = Device(ip=d["ip"], token=d["token"], timeout=2)
-                info = dev.send("miIO.info", [], retry_count=0)
+                dev.send("miIO.info", [], retry_count=0)
                 device_result = {"online": True, "power": None}
             except Exception:
                 device_result = {"online": False, "power": None}
+        elif d.get("type") == "mesh_switch" and d.get("gateway_id"):
+            gateway = gateway_map.get(d["gateway_id"])
+            if gateway:
+                try:
+                    dev = Device(ip=gateway["ip"], token=gateway["token"], timeout=3)
+                    siid = d.get("siid", 2)
+                    props = dev.send("get_properties", [{"siid": siid, "piid": 1, "did": d.get("did")}], retry_count=1)
+                    if isinstance(props, list) and props and props[0].get("code") == 0:
+                        device_result = {"online": True, "power": props[0].get("value")}
+                    else:
+                        device_result = {"online": True, "power": None}
+                except Exception:
+                    device_result = {"online": False, "power": None}
         elif d.get("type") == "sensor" and d.get("id") == "sensor_air":
             dev = Device(ip=d["ip"], token=d["token"], timeout=2)
             r = dev.send("get_prop", AIR_PROPS, retry_count=0)
@@ -146,145 +133,100 @@ def query_single(d):
             dev = Device(ip=d["ip"], token=d["token"], timeout=2)
             props = dev.send("get_properties", [{"siid": 2, "piid": 1, "did": d["id"]}], retry_count=0)
             if isinstance(props, list) and props and props[0].get("code") == 0:
-                power = props[0].get("value")
+                device_result = {"online": True, "power": props[0].get("value")}
             else:
-                power = None
-            device_result = {"online": True, "power": power}
+                device_result = {"online": True, "power": None}
     except Exception:
         device_result = {"online": False, "power": None}
     return d["id"], device_result
 
-mesh_by_gateway = {}
-non_mesh_devices = []
-for d in devices:
-    if d.get("type") == "mesh_switch" and d.get("gateway_id"):
-        gid = d["gateway_id"]
-        if gid not in mesh_by_gateway:
-            mesh_by_gateway[gid] = []
-        mesh_by_gateway[gid].append(d)
-    else:
-        non_mesh_devices.append(d)
-
-with ThreadPoolExecutor(max_workers=15) as executor:
-    futures = {executor.submit(query_single, d): d for d in non_mesh_devices}
-    for gid, mesh_devices in mesh_by_gateway.items():
-        gateway_info = gateway_map.get(gid)
-        if gateway_info:
-            futures[executor.submit(query_gateway_mesh_devices, gid, gateway_info, mesh_devices)] = ("mesh_batch", gid)
+def query_all_devices_parallel(devices):
+    results = {}
+    gateway_map = {d["id"]: d for d in devices if d.get("type") == "gateway"}
     
-    for future in as_completed(futures, timeout=30):
+    mesh_by_gateway = {}
+    non_mesh_devices = []
+    for d in devices:
+        if d.get("type") == "mesh_switch" and d.get("gateway_id"):
+            gid = d["gateway_id"]
+            if gid not in mesh_by_gateway:
+                mesh_by_gateway[gid] = []
+            mesh_by_gateway[gid].append(d)
+        else:
+            non_mesh_devices.append(d)
+    
+    def query_mesh_batch(gateway_id, gateway_info, mesh_devices):
+        batch_results = {}
         try:
-            result = future.result(timeout=8)
-            with results_lock:
-                if isinstance(result, dict) and "mesh_batch" not in result:
+            dev = Device(ip=gateway_info["ip"], token=gateway_info["token"], timeout=5)
+            props_list = [{"siid": d.get("siid", 2), "piid": 1, "did": d.get("did")} for d in mesh_devices]
+            props = dev.send("get_properties", props_list, retry_count=2)
+            if isinstance(props, list):
+                for i, p in enumerate(props):
+                    if i < len(mesh_devices):
+                        d = mesh_devices[i]
+                        if p.get("code") == 0:
+                            batch_results[d["id"]] = {"online": True, "power": p.get("value")}
+                        else:
+                            batch_results[d["id"]] = {"online": True, "power": None}
+        except Exception:
+            for d in mesh_devices:
+                batch_results[d["id"]] = {"online": False, "power": None}
+        return batch_results
+    
+    with ThreadPoolExecutor(max_workers=15) as executor:
+        futures = {executor.submit(query_single_device, d, gateway_map): d for d in non_mesh_devices}
+        
+        for gid, mesh_devices in mesh_by_gateway.items():
+            gateway_info = gateway_map.get(gid)
+            if gateway_info:
+                futures[executor.submit(query_mesh_batch, gid, gateway_info, mesh_devices)] = ("mesh_batch", gid)
+        
+        for future in as_completed(futures, timeout=30):
+            try:
+                result = future.result(timeout=8)
+                if isinstance(result, dict):
                     for device_id, device_result in result.items():
                         results[device_id] = device_result
                 elif isinstance(result, tuple):
                     device_id, device_result = result
                     results[device_id] = device_result
-        except Exception:
-            pass
+            except Exception:
+                pass
+    
+    return results
 
-print(json.dumps(results))
-"""
+def query_single_device_status(dev):
+    gateway_map = {d["id"]: d for d in ALL_DEVICES if d.get("type") == "gateway"}
+    _, result = query_single_device(dev, gateway_map)
+    return result
 
-_MIIO_SET = """
-import warnings; warnings.filterwarnings("ignore")
-import json, sys
-from miio import Device
-ip, token, did, val, device_type, gateway_id, mesh_did, siid = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8]
-if device_type == "mesh_switch" and gateway_id and mesh_did:
+def control_device(dev, power_on):
     try:
-        gateway = Device(ip=ip, token=token, timeout=3)
-        gateway.send("set_properties", [{"siid": int(siid), "piid": 1, "value": val == "true", "did": mesh_did}], retry_count=1)
-        print(json.dumps({"ok": True}))
-    except Exception as e:
-        print(json.dumps({"ok": False, "error": str(e)}))
-else:
-    try:
-        dev = Device(ip=ip, token=token, timeout=3)
-        dev.send("set_properties", [{"siid": 2, "piid": 1, "value": val == "true", "did": did}], retry_count=1)
-        print(json.dumps({"ok": True}))
-    except Exception as e:
-        print(json.dumps({"ok": False, "error": str(e)}))
-"""
-
-_MIIO_GET_SINGLE = """
-import warnings; warnings.filterwarnings("ignore")
-import json, sys
-from miio import Device
-
-ip, token, device_id, device_type, gateway_ip, gateway_token, mesh_did, siid = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], sys.argv[8]
-
-result = {"online": False, "power": None}
-try:
-    if device_type == "mesh_switch" and gateway_ip and mesh_did:
-        dev = Device(ip=gateway_ip, token=gateway_token, timeout=3)
-        props = dev.send("get_properties", [{"siid": int(siid), "piid": 1, "did": mesh_did}], retry_count=2)
-        if isinstance(props, list) and props and props[0].get("code") == 0:
-            result = {"online": True, "power": props[0].get("value")}
+        if dev.get("type") == "mesh_switch" and dev.get("gateway_id"):
+            gateway = DEVICE_MAP.get(dev["gateway_id"])
+            if gateway:
+                gw = Device(ip=gateway["ip"], token=gateway["token"], timeout=3)
+                siid = dev.get("siid", 2)
+                gw.send("set_properties", [{"siid": siid, "piid": 1, "value": power_on, "did": dev.get("did")}], retry_count=1)
+                return True
         else:
-            result = {"online": True, "power": None}
-    elif device_type == "gateway":
-        dev = Device(ip=ip, token=token, timeout=2)
-        dev.send("miIO.info", [], retry_count=0)
-        result = {"online": True, "power": None}
-    elif device_type == "sensor":
-        AIR_PROPS = ["co2", "humidity", "temperature", "pm25", "tvoc"]
-        dev = Device(ip=ip, token=token, timeout=2)
-        r = dev.send("get_prop", AIR_PROPS, retry_count=0)
-        if isinstance(r, dict):
-            readings = {k: r[k] for k in AIR_PROPS if k in r}
-            result = {"online": True, "power": None, "readings": readings}
-        else:
-            result = {"online": True, "power": None}
-    elif device_type == "speaker":
-        dev = Device(ip=ip, token=token, timeout=2)
-        dev.send("miIO.info", [], retry_count=0)
-        result = {"online": True, "power": None}
-    else:
-        dev = Device(ip=ip, token=token, timeout=2)
-        props = dev.send("get_properties", [{"siid": 2, "piid": 1, "did": device_id}], retry_count=0)
-        if isinstance(props, list) and props and props[0].get("code") == 0:
-            result = {"online": True, "power": props[0].get("value")}
-        else:
-            result = {"online": True, "power": None}
-except Exception:
-    pass
-
-print(json.dumps(result))
-"""
-
-def _run_miio(script, args, timeout=10):
-    result = subprocess.run(
-        [sys.executable, "-c", script] + args,
-        capture_output=True, text=True, timeout=timeout
-    )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "error")
-    return json.loads(result.stdout.strip())
+            d = Device(ip=dev["ip"], token=dev["token"], timeout=3)
+            d.send("set_properties", [{"siid": 2, "piid": 1, "value": power_on, "did": dev["id"]}], retry_count=1)
+            return True
+    except Exception:
+        return False
+    return False
 
 def refresh_cache_background():
-    global device_cache, cache_last_update, background_refresh_running
+    global device_cache, cache_last_update
     
     devices = get_display_devices()
-    payload = json.dumps([{
-        "id": d["id"], 
-        "ip": d.get("ip", ""), 
-        "token": d.get("token", ""), 
-        "type": d["type"],
-        "gateway_id": d.get("gateway_id", ""),
-        "did": d.get("did", ""),
-        "siid": d.get("siid", 2)
-    } for d in devices])
+    result = query_all_devices_parallel(devices)
     
-    try:
-        result = _run_miio(_MIIO_GET_ALL_PARALLEL, [payload], timeout=35)
-        with cache_lock:
-            device_cache = result
-            cache_last_update = time.time()
-    except Exception as e:
-        pass
+    with cache_lock:
+        device_cache = result
+        cache_last_update = time.time()
 
 def start_background_refresh():
     global background_refresh_running
@@ -322,26 +264,11 @@ def api_status_all():
         if device_cache:
             return jsonify(device_cache)
     
-    payload = json.dumps([{
-        "id": d["id"], 
-        "ip": d.get("ip", ""), 
-        "token": d.get("token", ""), 
-        "type": d["type"],
-        "gateway_id": d.get("gateway_id", ""),
-        "did": d.get("did", ""),
-        "siid": d.get("siid", 2)
-    } for d in devices])
-    
-    try:
-        result = _run_miio(_MIIO_GET_ALL_PARALLEL, [payload], timeout=35)
-        with cache_lock:
-            device_cache = result
-            cache_last_update = time.time()
-        return jsonify(result)
-    except subprocess.TimeoutExpired:
-        return jsonify({d["id"]: {"online": False, "power": None} for d in devices})
-    except Exception as e:
-        return jsonify({d["id"]: {"online": False, "power": None} for d in devices})
+    result = query_all_devices_parallel(devices)
+    with cache_lock:
+        device_cache = result
+        cache_last_update = time.time()
+    return jsonify(result)
 
 @app.route("/api/status/<device_id>")
 def api_status(device_id):
@@ -350,35 +277,11 @@ def api_status(device_id):
     if not dev:
         return jsonify({"error": "Device not found"}), 404
     
-    gateway_ip = ""
-    gateway_token = ""
-    mesh_did = ""
-    siid = str(dev.get("siid", 2))
-    
-    if dev.get("type") == "mesh_switch" and dev.get("gateway_id"):
-        gateway = DEVICE_MAP.get(dev["gateway_id"])
-        if gateway:
-            gateway_ip = gateway.get("ip", "")
-            gateway_token = gateway.get("token", "")
-            mesh_did = dev.get("did", "")
-    
-    try:
-        result = _run_miio(_MIIO_GET_SINGLE, [
-            dev.get("ip", ""),
-            dev.get("token", ""),
-            device_id,
-            dev.get("type", ""),
-            gateway_ip,
-            gateway_token,
-            mesh_did,
-            siid
-        ], timeout=5)
-        with cache_lock:
-            if device_cache is not None:
-                device_cache[device_id] = result
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"online": False, "power": None})
+    result = query_single_device_status(dev)
+    with cache_lock:
+        if device_cache is not None:
+            device_cache[device_id] = result
+    return jsonify(result)
 
 @app.route("/api/control/<device_id>", methods=["POST"])
 def api_control(device_id):
@@ -391,23 +294,14 @@ def api_control(device_id):
     body = request.get_json() or {}
     if "power" not in body:
         return jsonify({"error": "Missing 'power' field"}), 400
-    power_str = "true" if body["power"] else "false"
     
     with cache_lock:
-        if device_id in device_cache:
+        if device_cache is not None:
             device_cache[device_id]["power"] = body["power"]
             device_cache[device_id]["online"] = True
     
     def async_control():
-        try:
-            if dev.get("type") == "mesh_switch" and dev.get("gateway_id"):
-                gateway = DEVICE_MAP.get(dev["gateway_id"])
-                if gateway:
-                    _run_miio(_MIIO_SET, [gateway["ip"], gateway["token"], device_id, power_str, dev["type"], dev["gateway_id"], dev.get("did", ""), str(dev.get("siid", 2))], timeout=5)
-            else:
-                _run_miio(_MIIO_SET, [dev["ip"], dev["token"], device_id, power_str, dev["type"], "", "", ""], timeout=5)
-        except Exception:
-            pass
+        control_device(dev, body["power"])
     
     threading.Thread(target=async_control, daemon=True).start()
     
@@ -463,24 +357,13 @@ def api_set_display():
 
 @app.route("/api/devices/scan", methods=["POST"])
 def api_scan_devices():
-    try:
-        result = subprocess.run(
-            [sys.executable, "token_extractor.py"],
-            capture_output=True, text=True, timeout=120
-        )
-        if result.returncode != 0:
-            return jsonify({"error": result.stderr}), 500
-        output = result.stdout
-        devices = []
-        for line in output.split('\n'):
-            if 'model:' in line.lower() or 'did:' in line.lower():
-                pass
-        return jsonify({"ok": True, "message": "扫描完成，请查看设备列表"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"ok": True, "message": "扫描功能暂不可用"})
 
-if __name__ == "__main__":
+def main():
     print("启动米家控制面板，访问 http://localhost:5001")
     print("设备管理页面，访问 http://localhost:5001/manage")
     start_background_refresh()
     app.run(host="127.0.0.1", port=5001, debug=False, threaded=True)
+
+if __name__ == "__main__":
+    main()
