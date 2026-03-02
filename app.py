@@ -62,16 +62,17 @@ def get_display_devices():
     config = load_config()
     display_ids = set(config.get("display_devices", []))
     devices = [d for d in ALL_DEVICES if d["id"] in display_ids]
-    # 确保蓝牙Mesh设备对应的网关也被包含
-    gateway_ids = set()
-    for d in devices:
-        if d.get("type") == "mesh_switch" and d.get("gateway_id"):
-            gateway_ids.add(d["gateway_id"])
-    for gw_id in gateway_ids:
-        if gw_id not in display_ids:
-            gw = DEVICE_MAP.get(gw_id)
-            if gw:
-                devices.append(gw)
+    
+    # 始终包含网关设备（用于蓝牙Mesh设备通信）
+    for d in ALL_DEVICES:
+        if d.get("type") == "gateway" and d["id"] not in display_ids:
+            devices.append(d)
+    
+    # 始终包含空气质量检测仪（用于环境监测）
+    for d in ALL_DEVICES:
+        if d.get("id") == "sensor_air" and d["id"] not in display_ids:
+            devices.append(d)
+    
     return devices
 
 def get_device_map():
