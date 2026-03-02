@@ -475,9 +475,7 @@ def api_batch_add_devices():
                     "model": device.get("model")
                 }
                 existing_devices.append(new_device)
-                if device_id not in display_devices:
-                    display_devices.append(device_id)
-                added_count += 1
+            added_count += 1
         
         config["devices"] = existing_devices
         config["display_devices"] = display_devices
