@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>米家控制面板</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1c1f2e;
+    --card-hover: #232638;
+    --border: #2a2d3e;
+    --accent: #ff6900;
+    --text: #e8eaf0;
+    --text-dim: #8b90a8;
+    --green: #00c896;
+    --red: #ff4f6e;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+    min-height: 100vh;
+    padding: 24px 20px 40px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: 0.02em; }
+  header h1 span { color: var(--accent); }
+  .refresh-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 7px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.15s;
+  }
+  .refresh-btn:hover { background: var(--card-hover); color: var(--text); }
+  .refresh-btn.spinning { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Air quality bar ── */
+  #air-bar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 20px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 6px 0;
+    min-height: 52px;
+  }
+  #air-bar.loading { animation: shimmer 1.2s infinite; }
+  .air-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 20px;
+    border-right: 1px solid var(--border);
+    gap: 2px;
+  }
+  .air-metric:last-child { border-right: none; }
+  .air-metric-label {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .air-metric-value {
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .air-metric-unit { font-size: 0.65rem; color: var(--text-dim); }
+  .air-offline { color: var(--text-dim); font-size: 0.85rem; }
+
+  /* CO2 color coding */
+  .co2-good    { color: var(--green); }
+  .co2-ok      { color: #f0c040; }
+  .co2-poor    { color: var(--red); }
+
+  /* ── Device grid ── */
+  .section-title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    margin: 28px 0 12px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .card:hover { background: var(--card-hover); }
+  .card.on { border-color: rgba(255, 105, 0, 0.35); }
+  .card-top { display: flex; align-items: center; gap: 10px; }
+  .icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.05);
+    transition: background 0.15s;
+  }
+  .card.on .icon { background: rgba(255, 105, 0, 0.15); }
+  .card-name { font-size: 0.9rem; font-weight: 600; line-height: 1.3; }
+  .card-meta { font-size: 0.72rem; color: var(--text-dim); margin-top: 1px; }
+
+  .card-body { display: flex; flex-direction: column; gap: 6px; }
+  .status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 26px;
+  }
+  .dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+    margin-right: 6px;
+  }
+  .dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.offline { background: var(--red); }
+  .status-label { font-size: 0.78rem; color: var(--text-dim); display: flex; align-items: center; }
+
+  .toggle { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: #333; border-radius: 24px; transition: background 0.2s;
+  }
+  .slider::before {
+    content: ''; position: absolute;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; left: 3px; top: 3px; transition: transform 0.2s;
+  }
+  input:checked + .slider { background: var(--accent); }
+  input:checked + .slider::before { transform: translateX(20px); }
+  .toggle.loading .slider { opacity: 0.5; cursor: wait; }
+
+  .loading-skeleton {
+    height: 8px; border-radius: 4px;
+    background: linear-gradient(90deg, var(--border) 25%, var(--card-hover) 50%, var(--border) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s infinite;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  .countdown { font-size: 0.72rem; color: var(--text-dim); text-align: right; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>米家 <span>控制面板</span></h1>
+  <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">↻ 刷新</button>
+</header>
+
+<div id="air-bar"><span class="air-offline">空气检测仪加载中…</span></div>
+<div id="app"></div>
+<div class="countdown" id="countdown"></div>
+
+<script>
+const DEVICES = {{ devices | tojson }};
+
+const TYPE_ICONS = {
+  light: '💡', airconditioner: '❄️', humidifier: '💧',
+  plug: '🔌', sensor: '📊', speaker: '🔊', appliance: '🏠',
+};
+const TYPE_LABELS = {
+  light: '灯光', airconditioner: '空调', humidifier: '加湿器',
+  plug: '插座', sensor: '传感器', speaker: '音响', appliance: '家电',
+};
+const SECTIONS = [
+  { label: '灯光',       types: ['light'] },
+  { label: '气候',       types: ['airconditioner', 'humidifier'] },
+  { label: '插座 / 音响', types: ['plug', 'speaker'] },
+  { label: '传感器',     types: ['sensor'] },
+  { label: '家电',       types: ['appliance'] },
+];
+
+const state = {};
+DEVICES.forEach(d => { state[d.id] = { online: null, power: null, loading: true, toggling: false, readings: null }; });
+
+// ── Air bar ──────────────────────────────────────────────
+function co2Class(v) {
+  if (v == null) return '';
+  if (v < 800)  return 'co2-good';
+  if (v < 1200) return 'co2-ok';
+  return 'co2-poor';
+}
+
+function updateAirBar() {
+  const bar = document.getElementById('air-bar');
+  const s = state['sensor_air'];
+  if (!s || s.loading) {
+    bar.innerHTML = '<span class="air-offline">空气检测仪加载中…</span>';
+    return;
+  }
+  if (!s.online) {
+    bar.innerHTML = '<span class="air-offline">空气检测仪离线</span>';
+    return;
+  }
+  const r = s.readings || {};
+  const metrics = [
+    { label: 'CO₂',  value: r.co2,         unit: 'ppm',  cls: co2Class(r.co2) },
+    { label: '温度',  value: r.temperature, unit: '°C',   cls: '' },
+    { label: '湿度',  value: r.humidity,    unit: '%',    cls: '' },
+    { label: 'PM2.5',value: r.pm25,         unit: 'μg/m³',cls: '' },
+    { label: 'TVOC', value: r.tvoc,         unit: 'ppb',  cls: '' },
+  ];
+  bar.innerHTML = metrics.map(m =>
+    `<div class="air-metric">
+      <span class="air-metric-label">${m.label}</span>
+      <span class="air-metric-value ${m.cls}">${m.value ?? '—'}</span>
+      <span class="air-metric-unit">${m.unit}</span>
+    </div>`
+  ).join('');
+}
+
+// ── Card rendering ────────────────────────────────────────
+function renderCardBody(d, s) {
+  if (s.loading) {
+    return `<div class="card-body"><div class="status-row"><div class="loading-skeleton" style="width:80px"></div></div></div>`;
+  }
+  const dotCls = s.online ? 'dot online' : 'dot offline';
+  const statusText = s.online ? (s.power === true ? '开启' : s.power === false ? '关闭' : '在线') : '离线';
+  let row;
+  if (d.controllable && s.online) {
+    const checked = s.power === true ? 'checked' : '';
+    const loadingCls = s.toggling ? ' loading' : '';
+    row = `<div class="status-row">
+      <span class="status-label"><span class="${dotCls}"></span>${statusText}</span>
+      <label class="toggle${loadingCls}">
+        <input type="checkbox" ${checked} onchange="toggle('${d.id}', this.checked)" ${s.toggling ? 'disabled' : ''}>
+        <span class="slider"></span>
+      </label>
+    </div>`;
+  } else {
+    row = `<div class="status-row">
+      <span class="status-label"><span class="${dotCls}"></span>${statusText}</span>
+    </div>`;
+  }
+  return `<div class="card-body">${row}</div>`;
+}
+
+function updateCard(id) {
+  const d = DEVICES.find(x => x.id === id);
+  const cardEl = document.getElementById(`card_${id}`);
+  if (!d || !cardEl) return;
+  const s = state[id];
+  cardEl.className = 'card' + (s.power === true ? ' on' : '');
+  const oldBody = cardEl.querySelector('.card-body');
+  if (oldBody) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = renderCardBody(d, s);
+    oldBody.replaceWith(tmp.firstElementChild);
+  }
+  if (id === 'sensor_air') updateAirBar();
+}
+
+function renderAll() {
+  const app = document.getElementById('app');
+  let html = '';
+  for (const section of SECTIONS) {
+    const devs = DEVICES.filter(d => section.types.includes(d.type));
+    if (!devs.length) continue;
+    html += `<div class="section-title">${section.label}</div><div class="grid">`;
+    for (const d of devs) {
+      const s = state[d.id];
+      const icon = TYPE_ICONS[d.type] || '📦';
+      const label = TYPE_LABELS[d.type] || d.type;
+      const readOnly = !d.controllable ? '只读' : '可控';
+      html += `<div class="card${s.power === true ? ' on' : ''}" id="card_${d.id}">
+        <div class="card-top">
+          <div class="icon">${icon}</div>
+          <div>
+            <div class="card-name">${d.name}</div>
+            <div class="card-meta">${label} · ${readOnly}</div>
+          </div>
+        </div>
+        ${renderCardBody(d, s)}
+      </div>`;
+    }
+    html += '</div>';
+  }
+  app.innerHTML = html;
+}
+
+// ── Data fetching ─────────────────────────────────────────
+async function refreshAll() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  try {
+    const r = await fetch('/api/status/all');
+    const all = await r.json();
+    for (const [id, s] of Object.entries(all)) {
+      const old = state[id];
+      const changed = old.loading
+        || old.online !== s.online
+        || old.power !== s.power
+        || JSON.stringify(old.readings) !== JSON.stringify(s.readings || null);
+      state[id] = { online: s.online, power: s.power, loading: false,
+                    toggling: old.toggling || false, readings: s.readings || null };
+      if (changed) updateCard(id);
+    }
+  } catch (e) {
+    DEVICES.forEach(d => {
+      if (state[d.id].loading) {
+        state[d.id] = { online: false, power: null, loading: false, toggling: false, readings: null };
+        updateCard(d.id);
+      }
+    });
+  }
+  btn.classList.remove('spinning');
+}
+
+async function toggle(id, on) {
+  state[id].toggling = true;
+  updateCard(id);
+  try {
+    const r = await fetch(`/api/control/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ power: on }),
+    });
+    const j = await r.json();
+    if (j.ok) state[id].power = on;
+  } catch (e) {}
+  state[id].toggling = false;
+  updateCard(id);
+}
+
+// ── Auto-refresh ──────────────────────────────────────────
+let countdown = 15;
+function tick() {
+  countdown--;
+  document.getElementById('countdown').textContent = `${countdown} 秒后自动刷新`;
+  if (countdown <= 0) { countdown = 15; refreshAll(); }
+}
+
+renderAll();
+refreshAll();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
