@@ -456,13 +456,14 @@
             
             for (let i = 0; i < scanResult.devices.length; i++) {
               const d = scanResult.devices[i];
+              const isBleMesh = d.is_ble_mesh || !d.ip;
               html += '<div class="scan-item">' +
                 '<div style="display: flex; align-items: center; gap: 10px;">' +
                   '<input type="checkbox" class="device-checkbox" data-index="' + i + '" onchange="updateBatchButton()">' +
                   '<div class="scan-item-info">' +
-                    '<div class="scan-item-name">' + d.name + '</div>' +
+                    '<div class="scan-item-name">' + d.name + (isBleMesh ? ' <span style="font-size:10px;color:#888;">(蓝牙Mesh)</span>' : '') + '</div>' +
                     '<div class="scan-item-model">' + (d.model || '未知型号') + '</div>' +
-                    '<div class="scan-item-ip">' + d.ip + '</div>' +
+                    '<div class="scan-item-ip">' + (d.ip || '无IP地址') + '</div>' +
                   '</div>' +
                 '</div>' +
                 '<button class="btn btn-success btn-small" onclick="addScannedDevice(' + i + ')">添加</button>' +

@@ -566,17 +566,32 @@ def api_cloud_scan():
     
     new_devices = []
     for d in devices:
-        if d.get("ip") and d["ip"] not in existing_ips:
-            device_type = get_device_type_from_model(d.get("model"))
+        device_type = get_device_type_from_model(d.get("model"))
+        ip = d.get("ip")
+        did = d.get("did")
+        
+        if ip and ip not in existing_ips:
             new_devices.append({
                 "name": d["name"],
-                "did": d["did"],
-                "ip": d["ip"],
+                "did": did,
+                "ip": ip,
                 "token": d["token"],
                 "mac": d["mac"],
                 "model": d["model"],
                 "type": device_type,
                 "controllable": device_type in CONTROLLABLE_TYPES
+            })
+        elif did and did not in existing_dids and not ip:
+            new_devices.append({
+                "name": d["name"],
+                "did": did,
+                "ip": "",
+                "token": d.get("token", ""),
+                "mac": d.get("mac", ""),
+                "model": d["model"],
+                "type": device_type,
+                "controllable": False,
+                "is_ble_mesh": True
             })
     
     try:
