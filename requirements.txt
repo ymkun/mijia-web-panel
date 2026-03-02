@@ -1,0 +1,10 @@
+# 控制面板运行依赖
+flask
+python-miio
+
+# token 获取工具依赖
+requests
+pycryptodome
+charset-normalizer
+Pillow
+colorama

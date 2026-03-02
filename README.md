@@ -8,6 +8,7 @@
 
 - [功能概览](#功能概览)
 - [设备列表](#设备列表)
+- [获取设备 Token 与 IP](#获取设备-token-与-ip)
 - [快速启动](#快速启动)
 - [页面说明](#页面说明)
 - [技术说明](#技术说明)
@@ -46,6 +47,93 @@
 | 小爱-客厅 | 192.168.3.58 | 音响 | 只读 |
 | 微波炉 | 192.168.3.44 | 家电 | 只读 |
 | 破壁机 | 192.168.3.94 | 家电 | 只读 |
+
+---
+
+## 获取设备 Token 与 IP
+
+更换路由器、设备重置或添加新设备后，IP 和 Token 可能发生变化，需要重新获取并更新 `app.py` 中的设备列表。
+
+### 工具说明
+
+项目内置了 `token_extractor.py`，通过**小米云端账号**一次性拉取所有设备的 Token、IP、型号等信息，无需 root 手机。
+
+**依赖安装（首次使用）：**
+
+```bash
+cd /Users/mingkun/claude_project/mijia-panel
+pip3 install requests pycryptodome Pillow colorama --break-system-packages
+```
+
+### 使用步骤
+
+**第一步：运行脚本**
+
+```bash
+cd /Users/mingkun/claude_project/mijia-panel
+python3 token_extractor.py
+```
+
+**第二步：输入小米账号**
+
+```
+Username (email or phone): 你的小米账号
+Password: 你的密码（输入时不显示）
+```
+
+> 脚本直接与小米云端通信，账号密码不会被存储或上传至任何第三方。
+
+**第三步：选择服务器**
+
+```
+Server (China Mainland / International): China Mainland
+```
+选择 **China Mainland**（中国大陆账号）。
+
+**第四步：查看输出**
+
+成功后输出类似：
+
+```
+Name:     护眼客厅吸顶灯
+ID:       826441775
+MAC:      84:46:93:D6:E4:54
+IP:       192.168.3.19
+TOKEN:    ac572d894b94f6ff9152b0d4b83620e8
+MODEL:    lipro.light.23x2
+---------
+Name:     卧室空调
+ID:       845466214
+IP:       192.168.3.27
+TOKEN:    d0f0996992aefabaf404e0b1ccd27e72
+MODEL:    xiaomi.airc.r27r00
+---------
+...
+```
+
+- **有 IP 的设备**：WiFi 直连设备，可用于本面板
+- **无 IP 的设备**：蓝牙/红外设备，本面板不支持
+
+### 更新设备信息
+
+获取新的 Token/IP 后，编辑 `app.py` 顶部的 `DEVICES` 列表：
+
+```python
+DEVICES = [
+    {"id": "light_living", "name": "护眼客厅吸顶灯",
+     "ip": "192.168.3.19",                        # ← 更新此处
+     "token": "ac572d894b94f6ff9152b0d4b83620e8",  # ← 更新此处
+     "type": "light"},
+    # ... 其他设备
+]
+```
+
+修改后重启服务即可生效：
+
+```bash
+pkill -f "python3 app.py"
+python3 app.py
+```
 
 ---
 
