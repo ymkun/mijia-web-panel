@@ -4,12 +4,18 @@ import sys
 import time
 import os
 from datetime import datetime
+from pathlib import Path
 
 from flask import Flask, jsonify, request, render_template
 
 app = Flask(__name__)
 
-CONFIG_FILE = "devices_config.json"
+# 配置文件存储在用户目录下，避免被git追踪
+CONFIG_DIR = Path.home() / ".mijia-panel"
+CONFIG_FILE = CONFIG_DIR / "devices_config.json"
+
+# 确保配置目录存在
+CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 ALL_DEVICES = [
     {"id": "light_living",   "name": "护眼客厅吸顶灯", "ip": "192.168.3.19",  "token": "ac572d894b94f6ff9152b0d4b83620e8", "type": "light"},
