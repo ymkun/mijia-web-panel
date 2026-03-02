@@ -40,7 +40,11 @@ def main():
         'launcher.py'
     ]
     
-    subprocess.run(cmd, cwd=project_dir)
+    result = subprocess.run(cmd, cwd=project_dir)
+    
+    if result.returncode != 0:
+        print(f"打包失败，错误码: {result.returncode}")
+        sys.exit(1)
     
     print()
     print("=" * 50)

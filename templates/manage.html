@@ -72,11 +72,6 @@
     .scan-item-model { font-size: 12px; color: #888; margin-top: 4px; }
     .scan-item-ip { font-size: 11px; color: #666; margin-top: 2px; }
     
-    .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-    .tab { padding: 10px 20px; border: none; background: #f0f0f0; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
-    .tab.active { background: #007aff; color: white; }
-    .tab:hover:not(.active) { background: #e0e0e0; }
-    
     .type-tabs { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
     .type-tab { padding: 6px 14px; border: 1px solid #ddd; background: white; border-radius: 20px; cursor: pointer; font-size: 13px; transition: all 0.2s; color: #666; }
     .type-tab.active { background: #007aff; color: white; border-color: #007aff; }
@@ -224,6 +219,7 @@
     let qrWaitTimer = null;
     let allDevices = [];
     let currentType = 'all';
+    let scannedDevicesList = [];
 
     async function loadDevices() {
       const statusEl = document.getElementById('status');
@@ -235,7 +231,7 @@
         
         renderTypeTabs();
         renderDevices(getFilteredDevices());
-        statusEl.textContent = `共 ${allDevices.length} 个设备`;
+        statusEl.textContent = '共 ' + allDevices.length + ' 个设备';
       } catch (e) {
         statusEl.textContent = '加载失败: ' + e.message;
       }
@@ -243,25 +239,26 @@
 
     function getFilteredDevices() {
       if (currentType === 'all') return allDevices;
-      return allDevices.filter(d => d.type === currentType);
+      return allDevices.filter(function(d) { return d.type === currentType; });
     }
 
     function renderTypeTabs() {
       const typeCounts = { all: allDevices.length };
-      for (const d of allDevices) {
+      for (let i = 0; i < allDevices.length; i++) {
+        const d = allDevices[i];
         typeCounts[d.type] = (typeCounts[d.type] || 0) + 1;
       }
       
       const tabsEl = document.getElementById('type-tabs');
-      let html = `<button class="type-tab ${currentType === 'all' ? 'active' : ''}" onclick="filterByType('all')">全部<span class="count">${typeCounts.all}</span></button>`;
+      let html = '<button class="type-tab ' + (currentType === 'all' ? 'active' : '') + '" onclick="filterByType(\'all\')">全部<span class="count">' + typeCounts.all + '</span></button>';
       
-      const sortedTypes = Object.keys(typeCounts)
-        .filter(t => t !== 'all')
-        .sort((a, b) => typeCounts[b] - typeCounts[a]);
+      const types = Object.keys(typeCounts).filter(function(t) { return t !== 'all'; });
+      types.sort(function(a, b) { return typeCounts[b] - typeCounts[a]; });
       
-      for (const type of sortedTypes) {
+      for (let i = 0; i < types.length; i++) {
+        const type = types[i];
         const label = TYPE_LABELS[type] || type;
-        html += `<button class="type-tab ${currentType === type ? 'active' : ''}" onclick="filterByType('${type}')">${label}<span class="count">${typeCounts[type]}</span></button>`;
+        html += '<button class="type-tab ' + (currentType === type ? 'active' : '') + '" onclick="filterByType(\'' + type + '\')">' + label + '<span class="count">' + typeCounts[type] + '</span></button>';
       }
       
       tabsEl.innerHTML = html;
@@ -280,28 +277,29 @@
         return;
       }
       
-      listEl.innerHTML = devices.map(d => `
-        <div class="device-item ${d.id.startsWith('added_') ? 'added' : ''}">
-          <div class="device-info">
-            <div class="device-name">
-              ${d.name}
-              ${d.id.startsWith('added_') ? '<span class="badge badge-added">已添加</span>' : '<span class="badge badge-source">配置</span>'}
-            </div>
-            <div class="device-type">${TYPE_LABELS[d.type] || d.type} ${d.controllable ? '· 可控制' : ''}</div>
-          </div>
-          <div class="device-actions">
-            ${d.id.startsWith('added_') ? `
-              <button class="btn btn-secondary btn-small" onclick="showRenameModal('${d.id}', '${d.name}')">重命名</button>
-              <button class="btn btn-danger btn-small" onclick="deleteDevice('${d.id}')">删除</button>
-            ` : ''}
-            <label class="toggle-switch">
-              <input type="checkbox" ${d.display ? 'checked' : ''} onchange="toggleDisplay('${d.id}', this.checked)">
-              <span class="slider"></span>
-            </label>
-            <span class="status ${d.display ? 'online' : 'offline'}">${d.display ? '显示' : '隐藏'}</span>
-          </div>
-        </div>
-      `).join('');
+      let html = '';
+      for (let i = 0; i < devices.length; i++) {
+        const d = devices[i];
+        const isAdded = d.id.indexOf('added_') === 0;
+        html += '<div class="device-item ' + (isAdded ? 'added' : '') + '">' +
+          '<div class="device-info">' +
+            '<div class="device-name">' + d.name + ' ' +
+              (isAdded ? '<span class="badge badge-added">已添加</span>' : '<span class="badge badge-source">配置</span>') +
+            '</div>' +
+            '<div class="device-type">' + (TYPE_LABELS[d.type] || d.type) + ' ' + (d.controllable ? '· 可控制' : '') + '</div>' +
+          '</div>' +
+          '<div class="device-actions">' +
+            (isAdded ? '<button class="btn btn-secondary btn-small" onclick="showRenameModal(\'' + d.id + '\', \'' + d.name + '\')">重命名</button> ' +
+              '<button class="btn btn-danger btn-small" onclick="deleteDevice(\'' + d.id + '\')">删除</button> ' : '') +
+            '<label class="toggle-switch">' +
+              '<input type="checkbox" ' + (d.display ? 'checked' : '') + ' onchange="toggleDisplay(\'' + d.id + '\', this.checked)">' +
+              '<span class="slider"></span>' +
+            '</label>' +
+            '<span class="status ' + (d.display ? 'online' : 'offline') + '">' + (d.display ? '显示' : '隐藏') + '</span>' +
+          '</div>' +
+        '</div>';
+      }
+      listEl.innerHTML = html;
     }
 
     async function toggleDisplay(deviceId, display) {
@@ -404,13 +402,11 @@
         } else if (result.status === 'success') {
           statusEl.className = 'qr-status success';
           statusEl.textContent = '登录成功！正在扫描设备...';
-          setTimeout(() => {
-            startScan();
-          }, 500);
+          setTimeout(function() { startScan(); }, 500);
         } else {
           statusEl.className = 'qr-status error';
           statusEl.textContent = result.error || '登录失败';
-          qrWaitTimer = setTimeout(() => {
+          qrWaitTimer = setTimeout(function() {
             document.getElementById('get-qr-btn').style.display = 'inline-block';
             document.getElementById('get-qr-btn').disabled = false;
             document.getElementById('get-qr-btn').textContent = '重新获取二维码';
@@ -420,7 +416,7 @@
       } catch (e) {
         statusEl.className = 'qr-status error';
         statusEl.textContent = '网络错误: ' + e.message;
-        qrWaitTimer = setTimeout(() => {
+        qrWaitTimer = setTimeout(function() {
           document.getElementById('get-qr-btn').style.display = 'inline-block';
           document.getElementById('get-qr-btn').disabled = false;
           document.getElementById('get-qr-btn').textContent = '重新获取二维码';
@@ -441,23 +437,38 @@
           document.getElementById('scan-result').style.display = 'block';
           
           const statusEl = document.getElementById('scan-status');
-          statusEl.textContent = `扫描完成: 共 ${scanResult.total} 个设备，发现 ${scanResult.new_count} 个新设备`;
+          statusEl.textContent = '扫描完成: 共 ' + scanResult.total + ' 个设备，发现 ' + scanResult.new_count + ' 个新设备';
           statusEl.className = 'status online';
+          
+          scannedDevicesList = scanResult.devices;
           
           const devicesEl = document.getElementById('scan-devices');
           if (scanResult.devices.length === 0) {
             devicesEl.innerHTML = '<div class="empty">没有发现新设备</div>';
           } else {
-            devicesEl.innerHTML = scanResult.devices.map(d => `
-              <div class="scan-item">
-                <div class="scan-item-info">
-                  <div class="scan-item-name">${d.name}</div>
-                  <div class="scan-item-model">${d.model || '未知型号'}</div>
-                  <div class="scan-item-ip">${d.ip}</div>
-                </div>
-                <button class="btn btn-success btn-small" onclick='addScannedDevice(${JSON.stringify(d)})'>添加</button>
-              </div>
-            `).join('');
+            let html = '<div style="margin-bottom: 10px; display: flex; gap: 10px; align-items: center;">' +
+              '<label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">' +
+                '<input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)">' +
+                '<span>全选</span>' +
+              '</label>' +
+              '<button class="btn btn-success btn-small" onclick="batchAddDevices()" id="batch-add-btn" disabled>批量添加选中设备</button>' +
+            '</div>';
+            
+            for (let i = 0; i < scanResult.devices.length; i++) {
+              const d = scanResult.devices[i];
+              html += '<div class="scan-item">' +
+                '<div style="display: flex; align-items: center; gap: 10px;">' +
+                  '<input type="checkbox" class="device-checkbox" data-index="' + i + '" onchange="updateBatchButton()">' +
+                  '<div class="scan-item-info">' +
+                    '<div class="scan-item-name">' + d.name + '</div>' +
+                    '<div class="scan-item-model">' + (d.model || '未知型号') + '</div>' +
+                    '<div class="scan-item-ip">' + d.ip + '</div>' +
+                  '</div>' +
+                '</div>' +
+                '<button class="btn btn-success btn-small" onclick="addScannedDevice(' + i + ')">添加</button>' +
+              '</div>';
+            }
+            devicesEl.innerHTML = html;
           }
         }
       } catch (e) {
@@ -465,7 +476,60 @@
       }
     }
 
-    async function addScannedDevice(device) {
+    function toggleSelectAll(checked) {
+      const checkboxes = document.querySelectorAll('.device-checkbox');
+      for (let i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = checked;
+      }
+      updateBatchButton();
+    }
+
+    function updateBatchButton() {
+      const checkedCount = document.querySelectorAll('.device-checkbox:checked').length;
+      const btn = document.getElementById('batch-add-btn');
+      btn.disabled = checkedCount === 0;
+      btn.textContent = checkedCount > 0 ? '批量添加选中设备 (' + checkedCount + ')' : '批量添加选中设备';
+    }
+
+    function getSelectedDevices() {
+      const checkboxes = document.querySelectorAll('.device-checkbox:checked');
+      const devices = [];
+      for (let i = 0; i < checkboxes.length; i++) {
+        const index = parseInt(checkboxes[i].dataset.index);
+        devices.push(scannedDevicesList[index]);
+      }
+      return devices;
+    }
+
+    async function batchAddDevices() {
+      const devices = getSelectedDevices();
+      if (devices.length === 0) {
+        alert('请先选择要添加的设备');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/api/devices/batch-add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ devices: devices })
+        });
+        const result = await response.json();
+        
+        if (result.ok) {
+          alert('成功添加 ' + result.added_count + ' 个设备');
+          closeScanModal();
+          loadDevices();
+        } else {
+          alert('批量添加失败: ' + (result.error || '未知错误'));
+        }
+      } catch (e) {
+        alert('批量添加失败: ' + e.message);
+      }
+    }
+
+    async function addScannedDevice(index) {
+      const device = scannedDevicesList[index];
       const name = prompt('请输入设备名称:', device.name);
       if (!name) return;
       
@@ -524,14 +588,14 @@
         const response = await fetch('/api/devices/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, ip, token, model, type })
+          body: JSON.stringify({ name: name, ip: ip, token: token, model: model, type: type })
         });
         const result = await response.json();
         
         if (result.ok) {
           alert(result.updated ? '设备已更新' : '设备添加成功');
           closeAddModal();
-          loadScannedDevices();
+          loadDevices();
         } else {
           alert('添加失败: ' + (result.error || '未知错误'));
         }
@@ -560,7 +624,7 @@
       }
       
       try {
-        const response = await fetch(`/api/devices/rename/${deviceId}`, {
+        const response = await fetch('/api/devices/rename/' + deviceId, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: newName })
@@ -569,11 +633,7 @@
         
         if (result.ok) {
           closeRenameModal();
-          if (currentTab === 'added') {
-            loadAddedDevices();
-          } else {
-            loadDevices();
-          }
+          loadDevices();
         } else {
           alert('重命名失败: ' + (result.error || '未知错误'));
         }
@@ -586,17 +646,13 @@
       if (!confirm('确定要删除这个设备吗？')) return;
       
       try {
-        const response = await fetch(`/api/devices/delete/${deviceId}`, {
+        const response = await fetch('/api/devices/delete/' + deviceId, {
           method: 'POST'
         });
         const result = await response.json();
         
         if (result.ok) {
-          if (currentTab === 'added') {
-            loadAddedDevices();
-          } else {
-            loadDevices();
-          }
+          loadDevices();
         } else {
           alert('删除失败: ' + (result.error || '未知错误'));
         }

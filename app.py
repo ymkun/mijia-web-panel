@@ -435,6 +435,64 @@ def api_set_display():
     save_config(config)
     return jsonify({"ok": True})
 
+@app.route("/api/devices/batch-add", methods=["POST"])
+def api_batch_add_devices():
+    body = request.get_json() or {}
+    devices = body.get("devices", [])
+    
+    if not devices:
+        return jsonify({"error": "没有选择设备"}), 400
+    
+    try:
+        config = load_config()
+        existing_devices = config.get("devices", [])
+        existing_ips = {d.get("ip") for d in existing_devices if d.get("ip")}
+        display_devices = config.get("display_devices", [])
+        
+        added_count = 0
+        for device in devices:
+            ip = device.get("ip")
+            token = device.get("token")
+            
+            if not ip or not token:
+                continue
+            
+            if ip in existing_ips:
+                for d in existing_devices:
+                    if d.get("ip") == ip:
+                        d["name"] = device.get("name", d.get("name"))
+                        d["token"] = token
+                        break
+            else:
+                device_id = f"added_{uuid.uuid4().hex[:8]}"
+                device_type = device.get("type") or get_device_type_from_model(device.get("model"))
+                new_device = {
+                    "id": device_id,
+                    "name": device.get("name", device.get("model", "新设备")),
+                    "ip": ip,
+                    "token": token,
+                    "type": device_type,
+                    "model": device.get("model")
+                }
+                existing_devices.append(new_device)
+                if device_id not in display_devices:
+                    display_devices.append(device_id)
+                added_count += 1
+        
+        config["devices"] = existing_devices
+        config["display_devices"] = display_devices
+        
+        save_config(config)
+        
+        global DEVICE_MAP
+        DEVICE_MAP = get_device_map()
+        
+        return jsonify({"ok": True, "added_count": added_count})
+    except PermissionError as e:
+        return jsonify({"error": f"保存配置失败: 权限不足 ({str(e)})"}), 500
+    except Exception as e:
+        return jsonify({"error": f"批量添加失败: {str(e)}"}), 500
+
 @app.route("/api/devices/scan", methods=["POST"])
 def api_scan_devices():
     return jsonify({"ok": True, "message": "扫描功能暂不可用"})
