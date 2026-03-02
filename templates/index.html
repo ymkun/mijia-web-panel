@@ -184,6 +184,37 @@
   input:checked + .slider { background: var(--accent); }
   input:checked + .slider::before { transform: translateX(20px); }
   .toggle.loading .slider { opacity: 0.5; cursor: wait; }
+  
+  .card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mini-refresh-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    font-size: 12px;
+  }
+  .mini-refresh-btn:hover { 
+    background: var(--card-hover); 
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+  .mini-refresh-btn.loading {
+    pointer-events: none;
+  }
+  .mini-refresh-btn.loading .refresh-icon {
+    animation: spinner-rotate 0.8s linear infinite;
+  }
 
   .loading-skeleton {
     height: 8px; border-radius: 4px;
@@ -280,20 +311,28 @@ function renderCardBody(d, s) {
   }
   const dotCls = s.online ? 'dot online' : 'dot offline';
   const statusText = s.online ? (s.power === true ? '开启' : s.power === false ? '关闭' : '在线') : '离线';
+  const refreshBtn = d.controllable ? 
+    `<button class="mini-refresh-btn" onclick="refreshDevice('${d.id}', this)" title="刷新状态">
+      <span class="refresh-icon">↻</span>
+    </button>` : '';
   let row;
   if (d.controllable && s.online) {
     const checked = s.power === true ? 'checked' : '';
     const loadingCls = s.toggling ? ' loading' : '';
     row = `<div class="status-row">
       <span class="status-label"><span class="${dotCls}"></span>${statusText}</span>
-      <label class="toggle${loadingCls}">
-        <input type="checkbox" ${checked} onchange="toggle('${d.id}', this.checked)" ${s.toggling ? 'disabled' : ''}>
-        <span class="slider"></span>
-      </label>
+      <div class="card-actions">
+        ${refreshBtn}
+        <label class="toggle${loadingCls}">
+          <input type="checkbox" ${checked} onchange="toggle('${d.id}', this.checked)" ${s.toggling ? 'disabled' : ''}>
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>`;
   } else {
     row = `<div class="status-row">
       <span class="status-label"><span class="${dotCls}"></span>${statusText}</span>
+      ${refreshBtn}
     </div>`;
   }
   return `<div class="card-body">${row}</div>`;
@@ -372,8 +411,6 @@ async function refreshAll() {
 
 async function toggle(id, on) {
   state[id].toggling = true;
-  // 立即更新本地状态，提供即时反馈
-  const oldPower = state[id].power;
   state[id].power = on;
   updateCard(id);
   
@@ -385,25 +422,40 @@ async function toggle(id, on) {
     });
     const j = await r.json();
     if (!j.ok) {
-      // 如果控制失败，恢复原来的状态
-      state[id].power = oldPower;
+      state[id].power = !on;
     }
-    // 控制成功后不再查询状态，直接使用本地状态
-    // 依靠定时刷新（15秒）来同步状态
   } catch (e) {
-    // 如果请求失败，恢复原来的状态
-    state[id].power = oldPower;
+    state[id].power = !on;
   }
   state[id].toggling = false;
   updateCard(id);
 }
 
+async function refreshDevice(id, btnEl) {
+  if (btnEl) btnEl.classList.add('loading');
+  try {
+    const r = await fetch(`/api/status/${id}`);
+    const s = await r.json();
+    const old = state[id];
+    state[id] = { 
+      online: s.online, 
+      power: s.power, 
+      loading: false,
+      toggling: old.toggling || false, 
+      readings: s.readings || null 
+    };
+    updateCard(id);
+  } catch (e) {
+  }
+  if (btnEl) btnEl.classList.remove('loading');
+}
+
 // ── Auto-refresh ──────────────────────────────────────────
-let countdown = 15;
+let countdown = 30;
 function tick() {
   countdown--;
   document.getElementById('countdown').textContent = `${countdown} 秒后自动刷新`;
-  if (countdown <= 0) { countdown = 15; refreshAll(); }
+  if (countdown <= 0) { countdown = 30; refreshAll(); }
 }
 
 renderAll();
