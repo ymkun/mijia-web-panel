@@ -22,6 +22,7 @@ def main():
         '--windowed',
         '--add-data=templates:templates',
         '--add-data=app.py:.',
+        '--add-data=service.py:.',
         '--add-data=token_extractor.py:.',
         '--hidden-import=flask',
         '--hidden-import=miio',
@@ -43,7 +44,7 @@ def main():
     print()
     print("=" * 50)
     print("打包完成!")
-    print(f"应用位置: {project_dir / 'dist' / '米家控制面板'}")
+    print(f"应用位置: {project_dir / 'dist' / '米家控制面板.app'}")
     print("=" * 50)
 
 if __name__ == "__main__":

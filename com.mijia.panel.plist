@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mijia.panel</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/mingkun/claude_project/mijia-panel/dist/米家控制面板.app/Contents/MacOS/米家控制面板</string>
+        <string>--service</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/mijia-panel.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/mijia-panel.log</string>
+    <key>WorkingDirectory</key>
+    <string>/Users/mingkun/claude_project/mijia-panel</string>
+</dict>
+</plist>
