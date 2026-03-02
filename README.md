@@ -10,6 +10,8 @@
 - [设备列表](#设备列表)
 - [获取设备 Token 与 IP](#获取设备-token-与-ip)
 - [快速启动](#快速启动)
+- [开机自启动](#开机自启动)
+- [macOS 应用打包](#macos-应用打包)
 - [页面说明](#页面说明)
 - [技术说明](#技术说明)
 - [常见问题](#常见问题)
@@ -20,15 +22,20 @@
 
 | 功能 | 说明 |
 |------|------|
-| 设备状态查询 | 页面加载时并行查询所有设备，约 5 秒内完成 |
-| 开关控制 | 灯光、空调、加湿器、插座支持一键开关 |
+| 设备状态查询 | 后台缓存 + 并行查询，页面加载即显示 |
+| 开关控制 | 灯光、空调、加湿器、插座、Mesh 开关支持一键开关 |
 | 空气质量实时读数 | 页面顶部常驻显示 CO₂、温度、湿度、PM2.5、TVOC |
-| 自动刷新 | 每 15 秒静默刷新一次，**仅状态变化的设备才更新** |
+| 自动刷新 | 后台每 10 秒刷新缓存，前端每 30 秒更新显示 |
+| 单设备刷新 | 每个可控设备支持单独刷新按钮 |
+| 开机自启动 | 支持 macOS LaunchAgent 开机自动启动服务 |
+| macOS 应用打包 | 可打包为独立 .app 应用 |
 | 离线可用 | 前端无外部依赖，断网仍可访问局域网设备 |
 
 ---
 
 ## 设备列表
+
+### WiFi 直连设备
 
 | 设备名称 | IP | 类型 | 可控制 |
 |----------|----|------|--------|
@@ -47,6 +54,21 @@
 | 小爱-客厅 | 192.168.3.58 | 音响 | 只读 |
 | 微波炉 | 192.168.3.44 | 家电 | 只读 |
 | 破壁机 | 192.168.3.94 | 家电 | 只读 |
+
+### 蓝牙 Mesh 设备（通过网关控制）
+
+| 设备名称 | 网关 | 类型 | 可控制 |
+|----------|------|------|--------|
+| 客厅灯 | Xiaomi Home Hub | Mesh 开关 | ✅ |
+| 餐厅灯 | Xiaomi Home Hub | Mesh 开关 | ✅ |
+| 主卧室灯 | Xiaomi Home Hub | Mesh 开关 | ✅ |
+| 卫生间灯 | Xiaomi Home Hub | Mesh 开关 | ✅ |
+| 筒灯 | Xiaomi Home Hub | Mesh 开关 | ✅ |
+| 次卧室开关 | Xiaomi Home Hub | Mesh 开关 | ✅ |
+| 床头灯(衣柜) | Xiaomi Home Hub | Mesh 开关 | ✅ |
+| 吸顶灯 | Xiaomi Home Hub | Mesh 开关 | ✅ |
+
+> 网关：Xiaomi Home Hub (192.168.3.77)
 
 ---
 
@@ -186,6 +208,82 @@ http://localhost:5001
 
 ---
 
+## 开机自启动
+
+使用 macOS LaunchAgent 实现开机自动启动后台服务。
+
+### 安装服务
+
+```bash
+./install-service.sh
+```
+
+安装后：
+- 服务会立即启动
+- 开机后自动在后台运行
+- 访问地址：http://localhost:5001
+
+### 卸载服务
+
+```bash
+./uninstall-service.sh
+```
+
+### 常用命令
+
+| 命令 | 说明 |
+|------|------|
+| `launchctl list \| grep mijia` | 查看服务状态 |
+| `launchctl unload ~/Library/LaunchAgents/com.mijia.panel.plist` | 停止服务 |
+| `launchctl load ~/Library/LaunchAgents/com.mijia.panel.plist` | 启动服务 |
+| `tail -f /tmp/mijia-panel.log` | 查看日志 |
+
+### 工作原理
+
+- 使用 macOS 原生 LaunchAgent 机制
+- 服务以 `--service` 参数启动，不会自动打开浏览器
+- 用户按需打开 Edge PWA 应用或浏览器访问
+
+---
+
+## macOS 应用打包
+
+将项目打包为独立的 macOS 应用（.app）。
+
+### 打包步骤
+
+```bash
+# 1. 创建虚拟环境并安装依赖
+python3 -m venv build_env
+source build_env/bin/activate
+pip install pyinstaller flask python-miio requests pycryptodome Pillow charset-normalizer colorama
+
+# 2. 执行打包
+python build_app.py
+```
+
+### 输出位置
+
+```
+dist/米家控制面板.app
+```
+
+### 两种启动模式
+
+| 模式 | 命令 | 说明 |
+|------|------|------|
+| 交互模式 | 双击应用 | 启动服务 + 自动打开 Edge PWA |
+| 服务模式 | 应用路径 `--service` | 仅启动后台服务 |
+
+### Edge PWA 应用
+
+如果已通过 Edge 浏览器将网页封装为 PWA 应用，启动器会自动打开它：
+
+- 默认路径：`~/Applications/Edge Apps.localized/米家控制面板.app`
+- 如未找到 PWA，会回退到默认浏览器
+
+---
+
 ## 页面说明
 
 ### 顶部空气质量条
@@ -222,10 +320,18 @@ http://localhost:5001
 
 ```
 mijia-panel/
-├── app.py              # Flask 后端，API 路由及设备通信
+├── app.py                 # Flask 后端，API 路由及设备通信
+├── launcher.py            # 应用启动器（支持交互/服务模式）
+├── service.py             # 后台服务入口
+├── build_app.py           # PyInstaller 打包脚本
+├── install-service.sh     # 开机自启动安装脚本
+├── uninstall-service.sh   # 开机自启动卸载脚本
+├── com.mijia.panel.plist  # LaunchAgent 配置文件
 ├── templates/
-│   └── index.html      # 前端页面（纯 HTML/CSS/JS，无外部依赖）
-└── README.md           # 本文档
+│   ├── index.html         # 主页面（设备控制）
+│   └── manage.html        # 设备管理页面
+├── ARCHITECTURE.md        # 架构文档
+└── README.md              # 本文档
 ```
 
 ### API 接口
@@ -233,17 +339,22 @@ mijia-panel/
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/` | 返回控制面板页面 |
-| GET | `/api/status/all` | 批量查询所有设备状态 |
-| GET | `/api/status/<id>` | 查询单个设备状态 |
+| GET | `/manage` | 返回设备管理页面 |
+| GET | `/api/status/all` | 批量查询所有设备状态（返回缓存） |
+| GET | `/api/status/<id>` | 查询单个设备状态（实时查询） |
 | POST | `/api/control/<id>` | 控制设备，body: `{"power": true/false}` |
+| GET | `/api/devices/all` | 获取所有设备列表 |
+| POST | `/api/devices/display` | 设置设备显示/隐藏 |
 
 ### 设备通信原理
 
 - 使用 `python-miio` 库通过 UDP 与设备直接通信（局域网，无需云端）
-- 每次请求通过 `subprocess` 在独立进程中运行 miio 命令，避免多线程 UDP 冲突
-- 电源控制统一使用 MioT 协议：`siid=2, piid=1`
-- 空气检测仪使用旧版 `get_prop` 协议读取传感器数据
-- 小爱音箱使用 `miIO.info` 检测在线状态（不支持 MioT 开关控制）
+- **WiFi 设备**：直接通过 IP + Token 通信
+- **蓝牙 Mesh 设备**：通过网关中转通信，同一网关下的设备批量查询
+- **后台缓存**：每 10 秒自动刷新设备状态，前端请求直接返回缓存
+- **异步控制**：控制操作立即返回，后台线程执行实际指令
+
+详细架构说明请参阅 [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ---
 
