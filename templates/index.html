@@ -305,7 +305,18 @@ function co2Class(v) {
 
 function updateAirBar() {
   const bar = document.getElementById('air-bar');
-  const s = state['sensor_air'];
+  let sensorId = null;
+  for (const d of DEVICES) {
+    if (d.type === 'sensor') {
+      sensorId = d.id;
+      break;
+    }
+  }
+  if (!sensorId) {
+    bar.innerHTML = '<span class="air-offline">未配置空气检测仪</span>';
+    return;
+  }
+  const s = state[sensorId];
   if (!s || s.loading) {
     bar.innerHTML = '<span class="air-offline">空气检测仪加载中…</span>';
     return;
@@ -420,7 +431,7 @@ function updateCard(id) {
     tmp.innerHTML = renderCardBody(d, s);
     oldBody.replaceWith(tmp.firstElementChild);
   }
-  if (id === 'sensor_air') updateAirBar();
+  if (d.type === 'sensor') updateAirBar();
 }
 
 function renderAll() {

@@ -29,12 +29,17 @@ CONTROLLABLE_TYPES = {"light", "airconditioner", "humidifier", "plug", "mesh_swi
 AIR_PROPS = ["co2", "humidity", "temperature", "pm25", "tvoc"]
 
 MODEL_TYPE_MAP = {
+    "yeelink.switch.": "mesh_switch",
     "yeelink.": "light",
     "zhimi.airpurifier.": "airconditioner",
     "zhimi.humidifier.": "humidifier",
     "zhimi.airmonitor.": "sensor",
+    "cgllc.airmonitor.": "sensor",
     "lumi.gateway.": "gateway",
     "lumi.sensor_": "sensor",
+    "lumi.ctrl_": "mesh_switch",
+    "lumi.switch.": "mesh_switch",
+    "xiaomi.gateway.": "gateway",
     "cuco.plug.": "plug",
     "chuangmi.plug.": "plug",
     "qmi.powerstrip.": "plug",
@@ -74,8 +79,6 @@ MODEL_TYPE_MAP = {
     "giot.curtain.": "appliance",
     "lumi.curtain.": "appliance",
     "lumi.airrtc.": "airconditioner",
-    "lumi.ctrl_": "mesh_switch",
-    "lumi.switch.": "mesh_switch",
     "zimi.powerstrip.": "plug",
     "huayi.light.": "light",
     "opple.light.": "light",
@@ -91,18 +94,53 @@ cache_last_update = 0
 background_refresh_running = False
 scanned_devices_cache = []
 
+def aggregate_scanned_mesh_switches(devices):
+    mesh_switches = [d for d in devices if d.get("type") == "mesh_switch"]
+    other_devices = [d for d in devices if d.get("type") != "mesh_switch"]
+    
+    grouped = {}
+    for d in mesh_switches:
+        did = d.get("did")
+        if not did:
+            other_devices.append(d)
+            continue
+        if did not in grouped:
+            grouped[did] = {
+                "name": d.get("name", "智能开关"),
+                "did": did,
+                "model": d.get("model"),
+                "type": "mesh_switch_group",
+                "is_ble_mesh": True,
+                "is_existing": False,
+                "sub_switches": []
+            }
+        grouped[did]["sub_switches"].append({
+            "name": d.get("name", "开关"),
+            "siid": d.get("siid", 2)
+        })
+        if d.get("is_existing"):
+            grouped[did]["is_existing"] = True
+    
+    for group in grouped.values():
+        group["sub_switches"].sort(key=lambda x: x.get("siid") or 0)
+    
+    return other_devices + list(grouped.values())
+
 def load_config():
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 config = json.load(f)
             config.pop("scanned_devices", None)
+            if "gateways" not in config:
+                config["gateways"] = []
             return config
         except (json.JSONDecodeError, Exception):
             pass
     return {
         "devices": [],
-        "display_devices": []
+        "display_devices": [],
+        "gateways": []
     }
 
 def save_config(config):
@@ -135,7 +173,7 @@ def get_display_devices():
         if d.get("id") == "sensor_air" and d["id"] not in display_ids:
             devices.append(d)
     
-    return devices
+    return aggregate_mesh_switches(devices)
 
 def get_device_map():
     all_devices = get_all_devices()
@@ -148,6 +186,8 @@ def aggregate_mesh_switches(devices):
     grouped = {}
     for d in mesh_devices:
         did = d.get("did")
+        siid = d.get("siid")
+        
         if did not in grouped:
             grouped[did] = {
                 "id": f"mesh_group_{did}",
@@ -156,19 +196,55 @@ def aggregate_mesh_switches(devices):
                 "gateway_id": d.get("gateway_id"),
                 "did": did,
                 "controllable": True,
-                "sub_switches": []
+                "sub_switches": [],
+                "main_device": None
             }
-        grouped[did]["sub_switches"].append({
-            "id": d["id"],
-            "name": d.get("name", "开关"),
-            "siid": d.get("siid", 2),
-            "did": did
-        })
+        
+        if siid is None:
+            grouped[did]["name"] = d.get("name", grouped[did]["name"])
+            grouped[did]["main_device"] = d
+        else:
+            grouped[did]["sub_switches"].append({
+                "id": d["id"],
+                "name": d.get("name", "开关"),
+                "siid": siid,
+                "did": did
+            })
     
+    result_groups = []
     for group in grouped.values():
-        group["sub_switches"].sort(key=lambda x: x["siid"])
+        sub_count = len(group["sub_switches"])
+        
+        if sub_count == 0 and group["main_device"]:
+            main = group["main_device"]
+            single_device = {
+                "id": main["id"],
+                "name": main["name"],
+                "type": "mesh_switch",
+                "gateway_id": group["gateway_id"],
+                "did": group["did"],
+                "siid": 2,
+                "controllable": True,
+                "is_single_switch": True
+            }
+            result_groups.append(single_device)
+        elif sub_count == 1:
+            single_device = {
+                "id": group["sub_switches"][0]["id"],
+                "name": group["sub_switches"][0]["name"],
+                "type": "mesh_switch",
+                "gateway_id": group["gateway_id"],
+                "did": group["did"],
+                "siid": group["sub_switches"][0]["siid"],
+                "controllable": True,
+                "is_single_switch": True
+            }
+            result_groups.append(single_device)
+        elif sub_count > 1:
+            group["sub_switches"].sort(key=lambda x: x.get("siid") or 0)
+            result_groups.append(group)
     
-    return non_mesh_devices + list(grouped.values())
+    return non_mesh_devices + result_groups
 
 DEVICE_MAP = get_device_map()
 
@@ -197,7 +273,7 @@ def query_single_device(d, gateway_map):
                         device_result = {"online": True, "power": None}
                 except Exception:
                     device_result = {"online": False, "power": None}
-        elif d.get("type") == "sensor" and d.get("id") == "sensor_air":
+        elif d.get("type") == "sensor":
             dev = Device(ip=d["ip"], token=d["token"], timeout=2)
             r = dev.send("get_prop", AIR_PROPS, retry_count=0)
             if isinstance(r, dict):
@@ -222,16 +298,31 @@ def query_single_device(d, gateway_map):
 
 def query_all_devices_parallel(devices):
     results = {}
-    gateway_map = {d["id"]: d for d in devices if d.get("type") == "gateway"}
+    config = load_config()
+    gateways_list = config.get("gateways", [])
+    gateway_map = {g.get("did"): g for g in gateways_list}
     
     mesh_by_gateway = {}
     non_mesh_devices = []
     for d in devices:
-        if d.get("type") == "mesh_switch" and d.get("gateway_id"):
+        if d.get("type") == "mesh_switch_group":
+            for sub in d.get("sub_switches", []):
+                gid = d.get("gateway_id")
+                if gid and gateway_map.get(gid):
+                    if gid not in mesh_by_gateway:
+                        mesh_by_gateway[gid] = []
+                    mesh_by_gateway[gid].append({
+                        "siid": sub.get("siid", 2),
+                        "id": sub["id"],
+                        "did": d.get("did"),
+                        "group_id": d["id"]
+                    })
+        elif d.get("type") == "mesh_switch" and d.get("gateway_id"):
             gid = d["gateway_id"]
+            siid = d.get("siid") or 2
             if gid not in mesh_by_gateway:
                 mesh_by_gateway[gid] = []
-            mesh_by_gateway[gid].append(d)
+            mesh_by_gateway[gid].append({"siid": siid, "id": d["id"], "did": d.get("did")})
         else:
             non_mesh_devices.append(d)
     
@@ -248,7 +339,7 @@ def query_all_devices_parallel(devices):
                         if p.get("code") == 0:
                             batch_results[d["id"]] = {"online": True, "power": p.get("value")}
                         else:
-                            batch_results[d["id"]] = {"online": True, "power": None}
+                            batch_results[d["id"]] = {"online": False, "power": None}
         except Exception:
             for d in mesh_devices:
                 batch_results[d["id"]] = {"online": False, "power": None}
@@ -274,20 +365,44 @@ def query_all_devices_parallel(devices):
             except Exception:
                 pass
     
+    group_results = {}
+    for d in devices:
+        if d.get("type") == "mesh_switch_group":
+            group_id = d["id"]
+            sub_results = {}
+            all_online = False
+            for sub in d.get("sub_switches", []):
+                sub_id = sub["id"]
+                if sub_id in results:
+                    sub_results[sub_id] = results[sub_id]
+                    if results[sub_id].get("online"):
+                        all_online = True
+            group_results[group_id] = {
+                "online": all_online,
+                "sub_switches": sub_results
+            }
+    
+    results.update(group_results)
+    
     return results
 
 def query_single_device_status(dev):
-    gateway_map = {d["id"]: d for d in ALL_DEVICES if d.get("type") == "gateway"}
+    config = load_config()
+    gateways_list = config.get("gateways", [])
+    gateway_map = {g.get("did"): g for g in gateways_list}
     _, result = query_single_device(dev, gateway_map)
     return result
 
 def control_device(dev, power_on):
     try:
         if dev.get("type") == "mesh_switch" and dev.get("gateway_id"):
-            gateway = DEVICE_MAP.get(dev["gateway_id"])
+            config = load_config()
+            gateways_list = config.get("gateways", [])
+            gateway_map = {g.get("did"): g for g in gateways_list}
+            gateway = gateway_map.get(dev["gateway_id"])
             if gateway:
                 gw = Device(ip=gateway["ip"], token=gateway["token"], timeout=3)
-                siid = dev.get("siid", 2)
+                siid = dev.get("siid") or 2
                 gw.send("set_properties", [{"siid": siid, "piid": 1, "value": power_on, "did": dev.get("did")}], retry_count=1)
                 return True
         else:
@@ -510,15 +625,48 @@ def api_batch_add_devices():
         existing_devices = config.get("devices", [])
         existing_ips = {d.get("ip") for d in existing_devices if d.get("ip")}
         existing_mesh_keys = {(d.get("did"), d.get("siid")) for d in existing_devices if d.get("type") == "mesh_switch"}
-        display_devices = config.get("display_devices", [])
-        gateways = {d["id"]: d for d in existing_devices if d.get("type") == "gateway"}
-        default_gateway = list(gateways.keys())[0] if gateways else None
+        gateways = config.get("gateways", [])
+        default_gateway = gateways[0].get("did") if gateways else None
         
         added_count = 0
         for device in devices:
             ip = device.get("ip", "")
             token = device.get("token", "")
             did = device.get("did", "")
+            device_type = device.get("type", "")
+            sub_switches = device.get("sub_switches", [])
+            
+            if device_type == "mesh_switch_group":
+                if not did or not sub_switches:
+                    continue
+                
+                for sub in sub_switches:
+                    sub_siid = sub.get("siid", 2)
+                    mesh_key = (did, sub_siid)
+                    
+                    if mesh_key in existing_mesh_keys:
+                        for d in existing_devices:
+                            if d.get("did") == did and d.get("siid") == sub_siid:
+                                d["name"] = sub.get("name", d.get("name"))
+                                break
+                    else:
+                        device_id = uuid.uuid4().hex[:8]
+                        new_device = {
+                            "id": device_id,
+                            "name": sub.get("name", "开关"),
+                            "did": did,
+                            "siid": sub_siid,
+                            "ip": "",
+                            "token": token,
+                            "type": "mesh_switch",
+                            "gateway_id": default_gateway,
+                            "model": device.get("model")
+                        }
+                        existing_devices.append(new_device)
+                        existing_mesh_keys.add(mesh_key)
+                        added_count += 1
+                continue
+            
             is_ble_mesh = device.get("is_ble_mesh") or not ip
             
             if is_ble_mesh:
@@ -603,7 +751,6 @@ def api_batch_add_devices():
                     added_count += 1
         
         config["devices"] = existing_devices
-        config["display_devices"] = display_devices
         
         save_config(config)
         
@@ -687,23 +834,54 @@ def api_cloud_scan():
     
     existing_devices = get_all_devices()
     existing_ips = {d.get("ip") for d in existing_devices if d.get("ip")}
-    existing_dids = {d.get("did") for d in existing_devices if d.get("did")}
+    existing_mesh_keys = {(d.get("did"), d.get("siid")) for d in existing_devices if d.get("type") == "mesh_switch"}
+    
+    config = load_config()
+    saved_gateways = {g.get("did"): g for g in config.get("gateways", [])}
     
     all_scanned = []
+    scanned_gateways = []
     for d in devices:
         device_type = get_device_type_from_model(d.get("model"))
         ip = d.get("ip")
         did = d.get("did")
         
+        if device_type == "gateway" and ip:
+            gateway_info = {
+                "did": did,
+                "name": d["name"],
+                "ip": ip,
+                "token": d.get("token", ""),
+                "model": d["model"]
+            }
+            if did not in saved_gateways:
+                scanned_gateways.append(gateway_info)
+                saved_gateways[did] = gateway_info
+            else:
+                saved_gateways[did].update(gateway_info)
+        
+        parsed_did = did
+        siid = None
+        if did and "." in did and did.split(".")[-1].startswith("s"):
+            parts = did.split(".")
+            parsed_did = parts[0]
+            try:
+                siid = int(parts[1][1:])
+            except ValueError:
+                pass
+        
         is_existing = False
         if ip and ip in existing_ips:
             is_existing = True
-        elif did and did in existing_dids and not ip:
+        elif parsed_did and siid and (parsed_did, siid) in existing_mesh_keys:
+            is_existing = True
+        elif did and did in {d.get("did") for d in existing_devices} and not ip:
             is_existing = True
         
-        all_scanned.append({
+        device_data = {
             "name": d["name"],
-            "did": did,
+            "did": parsed_did or did,
+            "siid": siid,
             "ip": ip or "",
             "token": d.get("token", ""),
             "mac": d.get("mac", ""),
@@ -712,14 +890,21 @@ def api_cloud_scan():
             "controllable": device_type in CONTROLLABLE_TYPES,
             "is_existing": is_existing,
             "is_ble_mesh": not ip and did
-        })
+        }
+        all_scanned.append(device_data)
+    
+    if scanned_gateways:
+        config["gateways"] = list(saved_gateways.values())
+        save_config(config)
+    
+    aggregated = aggregate_scanned_mesh_switches(all_scanned)
     
     global scanned_devices_cache
-    scanned_devices_cache = all_scanned
+    scanned_devices_cache = aggregated
     
     return jsonify({
         "ok": True,
-        "devices": all_scanned,
+        "devices": aggregated,
         "total": len(devices)
     })
 
@@ -730,12 +915,118 @@ def api_cloud_scanned():
 
 @app.route("/api/devices/add", methods=["POST"])
 def api_add_device():
+    global DEVICE_MAP
     body = request.get_json() or {}
     name = body.get("name")
-    ip = body.get("ip")
-    token = body.get("token")
+    ip = body.get("ip", "")
+    token = body.get("token", "")
     model = body.get("model")
     device_type = body.get("type")
+    did = body.get("did", "")
+    siid = body.get("siid")
+    is_ble_mesh = body.get("is_ble_mesh") or not ip
+    sub_switches = body.get("sub_switches", [])
+    
+    if device_type == "mesh_switch_group":
+        if not did:
+            return jsonify({"error": "缺少设备DID"}), 400
+        if not sub_switches:
+            return jsonify({"error": "缺少子设备信息"}), 400
+        
+        try:
+            config = load_config()
+            devices = config.get("devices", [])
+            gateways = config.get("gateways", [])
+            default_gateway = gateways[0].get("did") if gateways else None
+            
+            if not default_gateway:
+                return jsonify({"error": "未找到网关，请先扫描设备"}), 400
+            
+            added_count = 0
+            for sub in sub_switches:
+                sub_siid = sub.get("siid", 2)
+                existing_mesh_keys = {(d.get("did"), d.get("siid")) for d in devices if d.get("type") == "mesh_switch"}
+                
+                if (did, sub_siid) not in existing_mesh_keys:
+                    device_id = uuid.uuid4().hex[:8]
+                    new_device = {
+                        "id": device_id,
+                        "name": sub.get("name", "开关"),
+                        "did": did,
+                        "siid": sub_siid,
+                        "ip": "",
+                        "token": token,
+                        "type": "mesh_switch",
+                        "gateway_id": default_gateway,
+                        "model": model
+                    }
+                    devices.append(new_device)
+                    added_count += 1
+            
+            config["devices"] = devices
+            save_config(config)
+            DEVICE_MAP = get_device_map()
+            return jsonify({"ok": True, "added_count": added_count, "updated": False})
+        except PermissionError as e:
+            return jsonify({"error": f"保存配置失败: 权限不足 ({str(e)})"}), 500
+        except Exception as e:
+            return jsonify({"error": f"添加失败: {str(e)}"}), 500
+    
+    if is_ble_mesh:
+        if not did:
+            return jsonify({"error": "缺少设备DID"}), 400
+        
+        parsed_did = did
+        parsed_siid = siid
+        if "." in did and did.split(".")[-1].startswith("s"):
+            parts = did.split(".")
+            parsed_did = parts[0]
+            try:
+                parsed_siid = int(parts[1][1:])
+            except ValueError:
+                pass
+        
+        if parsed_siid is None:
+            parsed_siid = 2
+        
+        try:
+            config = load_config()
+            devices = config.get("devices", [])
+            gateways = {d["id"]: d for d in devices if d.get("type") == "gateway"}
+            default_gateway = list(gateways.keys())[0] if gateways else None
+            
+            for d in devices:
+                if d.get("did") == parsed_did and d.get("siid") == parsed_siid:
+                    d["name"] = name or d.get("name")
+                    save_config(config)
+                    DEVICE_MAP = get_device_map()
+                    return jsonify({"ok": True, "device": d, "updated": True})
+            
+            device_id = uuid.uuid4().hex[:8]
+            new_device = {
+                "id": device_id,
+                "name": name or model or "新设备",
+                "did": parsed_did,
+                "siid": parsed_siid,
+                "ip": "",
+                "token": token,
+                "type": "mesh_switch",
+                "gateway_id": default_gateway,
+                "model": model
+            }
+            devices.append(new_device)
+            config["devices"] = devices
+            
+            if device_id not in config.get("display_devices", []):
+                config["display_devices"] = config.get("display_devices", []) + [device_id]
+            
+            save_config(config)
+            DEVICE_MAP = get_device_map()
+            return jsonify({"ok": True, "device": new_device, "updated": False})
+        except PermissionError as e:
+            return jsonify({"error": f"保存配置失败: 权限不足 ({str(e)})"}), 500
+        except Exception as e:
+            return jsonify({"error": f"添加失败: {str(e)}"}), 500
     
     if not ip or not token:
         return jsonify({"error": "缺少必要参数"}), 400
@@ -764,7 +1055,6 @@ def api_add_device():
                 d["token"] = token
                 d["type"] = device_type
                 save_config(config)
-                global DEVICE_MAP
                 DEVICE_MAP = get_device_map()
                 return jsonify({"ok": True, "device": d, "updated": True})
         

@@ -73,6 +73,8 @@
     .scan-item-ip { font-size: 11px; color: #666; margin-top: 2px; }
     .scan-item.existing-device { opacity: 0.7; background-color: #f0f0f0; }
     .status-tag.existing { background-color: #e0e0e0; color: #666; padding: 4px 12px; border-radius: 4px; font-size: 12px; }
+    .scan-item.mesh-group-item { background: linear-gradient(135deg, #f0f7ff 0%, #e8f4ff 100%); border: 1px solid #c8e0ff; }
+    .scan-item-sub { margin-top: 4px; line-height: 1.4; }
     
     .type-tabs { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
     .type-tab { padding: 6px 14px; border: 1px solid #ddd; background: white; border-radius: 20px; cursor: pointer; font-size: 13px; transition: all 0.2s; color: #666; }
@@ -501,8 +503,8 @@
             
             for (let i = 0; i < scanResult.devices.length; i++) {
               const d = scanResult.devices[i];
-              const isBleMesh = d.is_ble_mesh || !d.ip;
               const isExisting = d.is_existing;
+              const isMeshGroup = d.type === 'mesh_switch_group';
               
               let actionBtn = '';
               if (isExisting) {
@@ -511,17 +513,33 @@
                 actionBtn = '<button class="btn btn-success btn-small" onclick="addScannedDevice(' + i + ')">添加</button>';
               }
               
-              html += '<div class="scan-item' + (isExisting ? ' existing-device' : '') + '">' +
-                '<div style="display: flex; align-items: center; gap: 10px;">' +
-                  (isExisting ? '' : '<input type="checkbox" class="device-checkbox" data-index="' + i + '" onchange="updateBatchButton()">') +
-                  '<div class="scan-item-info">' +
-                    '<div class="scan-item-name">' + d.name + (isBleMesh ? ' <span style="font-size:10px;color:#888;">(蓝牙Mesh)</span>' : '') + '</div>' +
-                    '<div class="scan-item-model">' + (d.model || '未知型号') + '</div>' +
-                    '<div class="scan-item-ip">' + (d.ip || '无IP地址') + '</div>' +
+              if (isMeshGroup) {
+                const subNames = d.sub_switches.map(s => s.name).join(' / ');
+                html += '<div class="scan-item mesh-group-item' + (isExisting ? ' existing-device' : '') + '">' +
+                  '<div style="display: flex; align-items: center; gap: 10px;">' +
+                    (isExisting ? '' : '<input type="checkbox" class="device-checkbox" data-index="' + i + '" onchange="updateBatchButton()">') +
+                    '<div class="scan-item-info">' +
+                      '<div class="scan-item-name">' + d.name + ' <span style="font-size:10px;color:#888;">(智能开关 ' + d.sub_switches.length + '键)</span></div>' +
+                      '<div class="scan-item-model">' + (d.model || '未知型号') + '</div>' +
+                      '<div class="scan-item-sub" style="font-size:11px;color:#666;">' + subNames + '</div>' +
+                    '</div>' +
                   '</div>' +
-                '</div>' +
-                actionBtn +
-              '</div>';
+                  actionBtn +
+                '</div>';
+              } else {
+                const isBleMesh = d.is_ble_mesh || !d.ip;
+                html += '<div class="scan-item' + (isExisting ? ' existing-device' : '') + '">' +
+                  '<div style="display: flex; align-items: center; gap: 10px;">' +
+                    (isExisting ? '' : '<input type="checkbox" class="device-checkbox" data-index="' + i + '" onchange="updateBatchButton()">') +
+                    '<div class="scan-item-info">' +
+                      '<div class="scan-item-name">' + d.name + (isBleMesh ? ' <span style="font-size:10px;color:#888;">(蓝牙Mesh)</span>' : '') + '</div>' +
+                      '<div class="scan-item-model">' + (d.model || '未知型号') + '</div>' +
+                      '<div class="scan-item-ip">' + (d.ip || '无IP地址') + '</div>' +
+                    '</div>' +
+                  '</div>' +
+                  actionBtn +
+                '</div>';
+              }
             }
             devicesEl.innerHTML = html;
           }
@@ -588,6 +606,36 @@
 
     async function addScannedDevice(index) {
       const device = scannedDevicesList[index];
+      const isMeshGroup = device.type === 'mesh_switch_group';
+      
+      if (isMeshGroup) {
+        try {
+          const response = await fetch('/api/devices/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: device.name,
+              did: device.did,
+              model: device.model,
+              type: device.type,
+              sub_switches: device.sub_switches
+            })
+          });
+          const result = await response.json();
+          
+          if (result.ok) {
+            alert('成功添加智能开关 (' + result.added_count + ' 个按键)');
+            closeScanModal();
+            loadDevices();
+          } else {
+            alert('添加失败: ' + (result.error || '未知错误'));
+          }
+        } catch (e) {
+          alert('添加失败: ' + e.message);
+        }
+        return;
+      }
+      
       const name = prompt('请输入设备名称:', device.name);
       if (!name) return;
       
@@ -600,7 +648,10 @@
             ip: device.ip,
             token: device.token,
             model: device.model,
-            type: device.type
+            type: device.type,
+            did: device.did,
+            siid: device.siid,
+            is_ble_mesh: device.is_ble_mesh
           })
         });
         const result = await response.json();
