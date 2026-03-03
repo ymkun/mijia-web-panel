@@ -2,6 +2,8 @@
 
 在 Mac 浏览器中查看并控制家中所有本地 WiFi 米家设备的轻量 Web 面板。
 
+全程开发by claude code sonnet 4.6 +  GLM-5，没有手写一行代码
+
 ---
 
 ## 目录
@@ -13,6 +15,7 @@
 - [开机自启动](#开机自启动)
 - [macOS 应用打包](#macos-应用打包)
 - [页面说明](#页面说明)
+- [依赖库](#依赖库)
 - [技术说明](#技术说明)
 - [常见问题](#常见问题)
 
@@ -39,21 +42,21 @@
 
 | 设备名称 | IP | 类型 | 可控制 |
 |----------|----|------|--------|
-| 护眼客厅吸顶灯 | 192.168.3.19 | 灯光 | ✅ |
-| 护眼吸顶灯(主卧) | 192.168.3.18 | 灯光 | ✅ |
-| 护眼吸顶灯(次卧) | 192.168.3.20 | 灯光 | ✅ |
-| 卧室空调 | 192.168.3.27 | 空调 | ✅ |
-| 加湿器(卧室) | 192.168.3.110 | 加湿器 | ✅ |
-| 加湿器 | 192.168.3.39 | 加湿器 | ✅ |
-| 马歇尔音响插座 | 192.168.3.72 | 插座 | ✅ |
-| 空气检测仪 | 192.168.3.115 | 传感器 | 只读 |
-| 天然气卫士(1) | 192.168.3.32 | 传感器 | 只读 |
-| 天然气卫士(2) | 192.168.3.38 | 传感器 | 只读 |
-| 小爱-主卧室 | 192.168.3.74 | 音响 | 只读 |
-| 小爱-厨房 | 192.168.3.75 | 音响 | 只读 |
-| 小爱-客厅 | 192.168.3.58 | 音响 | 只读 |
-| 微波炉 | 192.168.3.44 | 家电 | 只读 |
-| 破壁机 | 192.168.3.94 | 家电 | 只读 |
+| 护眼客厅吸顶灯 | x.x.x.19 | 灯光 | ✅ |
+| 护眼吸顶灯(主卧) | x.x.x.18 | 灯光 | ✅ |
+| 护眼吸顶灯(次卧) | x.x.x.20 | 灯光 | ✅ |
+| 卧室空调 | x.x.x.27 | 空调 | ✅ |
+| 加湿器(卧室) | x.x.x.110 | 加湿器 | ✅ |
+| 加湿器 | x.x.x.39 | 加湿器 | ✅ |
+| 马歇尔音响插座 | x.x.x.72 | 插座 | ✅ |
+| 空气检测仪 | x.x.x.115 | 传感器 | 只读 |
+| 天然气卫士(1) | x.x.x.32 | 传感器 | 只读 |
+| 天然气卫士(2) | x.x.x.38 | 传感器 | 只读 |
+| 小爱-主卧室 | x.x.x.74 | 音响 | 只读 |
+| 小爱-厨房 | x.x.x.75 | 音响 | 只读 |
+| 小爱-客厅 | x.x.x.58 | 音响 | 只读 |
+| 微波炉 | x.x.x.44 | 家电 | 只读 |
+| 破壁机 | x.x.x.94 | 家电 | 只读 |
 
 ### 蓝牙 Mesh 设备（通过网关控制）
 
@@ -65,10 +68,8 @@
 | 卫生间灯 | Xiaomi Home Hub | Mesh 开关 | ✅ |
 | 筒灯 | Xiaomi Home Hub | Mesh 开关 | ✅ |
 | 次卧室开关 | Xiaomi Home Hub | Mesh 开关 | ✅ |
-| 床头灯(衣柜) | Xiaomi Home Hub | Mesh 开关 | ✅ |
-| 吸顶灯 | Xiaomi Home Hub | Mesh 开关 | ✅ |
 
-> 网关：Xiaomi Home Hub (192.168.3.77)
+> 网关：Xiaomi Home Hub (x.x.x.77)
 
 ---
 
@@ -79,6 +80,8 @@
 ### 工具说明
 
 项目内置了 `token_extractor.py`，通过**小米云端账号**一次性拉取所有设备的 Token、IP、型号等信息，无需 root 手机。
+
+> 项目也支持了登录小米云端账号自动拉取设备，该工具仅用于调试
 
 **依赖安装（首次使用）：**
 
@@ -104,6 +107,7 @@ Password: 你的密码（输入时不显示）
 ```
 
 > 脚本直接与小米云端通信，账号密码不会被存储或上传至任何第三方。
+> 建议扫码或者通过小米官网链接登录，更安全
 
 **第三步：选择服务器**
 
@@ -120,13 +124,13 @@ Server (China Mainland / International): China Mainland
 Name:     护眼客厅吸顶灯
 ID:       826441775
 MAC:      84:46:93:D6:E4:54
-IP:       192.168.3.19
+IP:       x.x.x.19
 TOKEN:    ac572d894b94f6ff9152b0d4b83620e8
 MODEL:    lipro.light.23x2
 ---------
 Name:     卧室空调
 ID:       845466214
-IP:       192.168.3.27
+IP:       x.x.x.27
 TOKEN:    d0f0996992aefabaf404e0b1ccd27e72
 MODEL:    xiaomi.airc.r27r00
 ---------
@@ -136,34 +140,13 @@ MODEL:    xiaomi.airc.r27r00
 - **有 IP 的设备**：WiFi 直连设备，可用于本面板
 - **无 IP 的设备**：蓝牙/红外设备，本面板不支持
 
-### 更新设备信息
-
-获取新的 Token/IP 后，编辑 `app.py` 顶部的 `DEVICES` 列表：
-
-```python
-DEVICES = [
-    {"id": "light_living", "name": "护眼客厅吸顶灯",
-     "ip": "192.168.3.19",                        # ← 更新此处
-     "token": "ac572d894b94f6ff9152b0d4b83620e8",  # ← 更新此处
-     "type": "light"},
-    # ... 其他设备
-]
-```
-
-修改后重启服务即可生效：
-
-```bash
-pkill -f "python3 app.py"
-python3 app.py
-```
-
 ---
 
 ## 快速启动
 
 ### 前提条件
 
-- Mac 与设备处于**同一局域网**（Wi-Fi：HUAWEI-51EFL1）
+- Mac 与设备处于**同一局域网**
 - 已安装 Python 3 及依赖库
 
 ### 检查依赖
@@ -311,6 +294,22 @@ dist/米家控制面板.app
 - 之后每 15 秒静默刷新一次
 - 只有状态发生变化的卡片才会更新（无全页闪烁）
 - 点击右上角「↻ 刷新」按钮可立即刷新
+
+---
+
+## 依赖库
+
+本项目使用以下开源依赖库：
+
+| 库名 | 版本 | 用途 | 链接 |
+|------|------|------|------|
+| Flask | 3.1.3 | Web 框架，提供 HTTP 服务和路由 | [palletsprojects.com/p/flask](https://palletsprojects.com/p/flask/) |
+| python-miio | 0.5.12 | 小米设备通信库，支持米家设备协议 | [github.com/rytilahti/python-miio](https://github.com/rytilahti/python-miio) |
+| requests | 2.32.5 | HTTP 客户端，用于云端 API 通信 | [requests.readthedocs.io](https://requests.readthedocs.io) |
+| pycryptodome | 3.23.0 | 加密库，用于小米账号登录加密 | [pycryptodome.org](https://www.pycryptodome.org) |
+| charset-normalizer | 3.4.4 | 字符编码检测 | [pypi.org/project/charset-normalizer](https://pypi.org/project/charset-normalizer/) |
+| Pillow | 12.1.1 | 图像处理库 | [python-pillow.github.io](https://python-pillow.github.io) |
+| colorama | 0.4.6 | 终端彩色输出 | [github.com/tartley/colorama](https://github.com/tartley/colorama) |
 
 ---
 
